@@ -1,0 +1,197 @@
+# Copyright 2025-2026 Kraklabs
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}/${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: darwin
+            arch: arm64
+            runner: macos-latest
+            platform: aarch64-apple-darwin
+            cc: ""
+            cgo_extra: "-framework Security"
+          - os: darwin
+            arch: amd64
+            runner: macos-latest
+            platform: x86_64-apple-darwin
+            cc: ""
+            cgo_extra: "-framework Security"
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            platform: x86_64-unknown-linux-gnu
+            cc: ""
+            cgo_extra: ""
+          - os: linux
+            arch: arm64
+            runner: ubuntu-latest
+            platform: aarch64-unknown-linux-gnu
+            cc: aarch64-linux-gnu-gcc
+            cgo_extra: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install cross-compiler (Linux arm64)
+        if: matrix.os == 'linux' && matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Download CozoDB
+        run: |
+          mkdir -p lib
+          curl -L "https://github.com/cozodb/cozo/releases/download/v0.7.6/libcozo_c-0.7.6-${{ matrix.platform }}.a.gz" -o lib/libcozo_c.a.gz
+          gunzip -f lib/libcozo_c.a.gz
+
+      - name: Build
+        env:
+          CGO_ENABLED: "1"
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          SHA="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          CGO_LDFLAGS="-L$(pwd)/lib -lcozo_c -lstdc++ -lm ${{ matrix.cgo_extra }}"
+
+          export CGO_LDFLAGS
+          if [ -n "${{ matrix.cc }}" ]; then
+            export CC="${{ matrix.cc }}"
+          fi
+
+          go build -tags cozodb \
+            -ldflags "-X main.version=$TAG -X main.commit=$SHA -X main.date=$DATE -s -w" \
+            -o mie ./cmd/mie
+
+      - name: Package
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          tar -czf "mie_${TAG}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz" mie
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mie-${{ matrix.os }}-${{ matrix.arch }}
+          path: mie_*.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/mie_*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Calculate checksums and update formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+
+          SHA_DARWIN_ARM64="$(sha256sum "artifacts/mie_${TAG}_darwin_arm64.tar.gz" | cut -d ' ' -f 1)"
+          SHA_DARWIN_AMD64="$(sha256sum "artifacts/mie_${TAG}_darwin_amd64.tar.gz" | cut -d ' ' -f 1)"
+          SHA_LINUX_AMD64="$(sha256sum "artifacts/mie_${TAG}_linux_amd64.tar.gz" | cut -d ' ' -f 1)"
+          SHA_LINUX_ARM64="$(sha256sum "artifacts/mie_${TAG}_linux_arm64.tar.gz" | cut -d ' ' -f 1)"
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/kraklabs/homebrew-mie.git"
+          cd homebrew-mie
+
+          cat > Formula/mie.rb << FORMULA_EOF
+          # Copyright 2025-2026 KrakLabs
+          # SPDX-License-Identifier: AGPL-3.0-or-later
+
+          # This formula is automatically updated by the MIE release workflow.
+          # Do not edit manually - changes will be overwritten on next release.
+
+          class Mie < Formula
+            desc "Memory Intelligence Engine - persistent memory layer for AI agents"
+            homepage "https://github.com/kraklabs/mie"
+            version "${VERSION}"
+            license "AGPL-3.0-or-later"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/kraklabs/mie/releases/download/${TAG}/mie_${TAG}_darwin_arm64.tar.gz"
+                sha256 "${SHA_DARWIN_ARM64}"
+              end
+              on_intel do
+                url "https://github.com/kraklabs/mie/releases/download/${TAG}/mie_${TAG}_darwin_amd64.tar.gz"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/kraklabs/mie/releases/download/${TAG}/mie_${TAG}_linux_arm64.tar.gz"
+                sha256 "${SHA_LINUX_ARM64}"
+              end
+              on_intel do
+                url "https://github.com/kraklabs/mie/releases/download/${TAG}/mie_${TAG}_linux_amd64.tar.gz"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+            end
+
+            def install
+              bin.install Dir["mie*"].first => "mie"
+            end
+
+            test do
+              system "#{bin}/mie", "--version"
+            end
+          end
+          FORMULA_EOF
+
+          # Remove leading whitespace from heredoc indentation
+          sed -i 's/^          //' Formula/mie.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/mie.rb
+          git commit -m "Update MIE to ${TAG}"
+          git push

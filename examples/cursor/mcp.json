@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "mie": {
+            "command": "mie",
+            "args": ["--mcp"],
+            "env": {
+                "MIE_CONFIG_PATH": "/path/to/.mie/config.yaml"
+            }
+        }
+    }
+}

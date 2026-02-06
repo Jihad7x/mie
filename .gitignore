@@ -1,0 +1,26 @@
+# Build artifacts
+bin/
+coverage.out
+
+# CozoDB libraries (downloaded by make deps)
+lib/
+
+# Local data
+.mie/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+vendor/
+
+# Local Claude/MCP config
+.claude/
+.mcp.json
