@@ -148,11 +148,11 @@ func storeFact(ctx context.Context, client Querier, args map[string]any, sourceA
 	}
 	category := GetStringArg(args, "category", "general")
 	if !validFactCategories[category] {
-		category = "general"
+		return nil, fmt.Errorf("invalid category %q. Must be one of: personal, professional, preference, technical, relationship, general", category)
 	}
 	confidence := GetFloat64Arg(args, "confidence", 0.8)
 	if confidence < 0 || confidence > 1.0 {
-		confidence = 0.8
+		return nil, fmt.Errorf("confidence must be between 0.0 and 1.0 (got %g)", confidence)
 	}
 	return client.StoreFact(ctx, StoreFactRequest{
 		Content:            content,
@@ -249,6 +249,12 @@ func storeRelationships(ctx context.Context, client Querier, sourceNodeID string
 		}
 		if !validEdgeTypes[edgeType] {
 			sb.WriteString(fmt.Sprintf("- Skipped invalid edge type: %s\n", edgeType))
+			continue
+		}
+
+		// Validate target node exists before creating edge.
+		if target, err := client.GetNodeByID(ctx, targetID); err != nil || target == nil {
+			sb.WriteString(fmt.Sprintf("- Skipped %s -> [%s]: target node not found\n", edgeType, targetID))
 			continue
 		}
 

@@ -43,8 +43,8 @@ func TestBulkStore_MixedTypes(t *testing.T) {
 	if !strings.Contains(result.Text, "2 facts") {
 		t.Errorf("expected '2 facts' in output, got: %s", result.Text)
 	}
-	if !strings.Contains(result.Text, "1 entitys") {
-		t.Errorf("expected '1 entitys' in output, got: %s", result.Text)
+	if !strings.Contains(result.Text, "1 entity") {
+		t.Errorf("expected '1 entity' in output, got: %s", result.Text)
 	}
 }
 
@@ -92,6 +92,9 @@ func TestBulkStore_CrossBatchReferences(t *testing.T) {
 	mock := &MockQuerier{
 		StoreEntityFunc: func(ctx context.Context, req StoreEntityRequest) (*Entity, error) {
 			return &Entity{ID: entityID, Name: req.Name, Kind: req.Kind, SourceAgent: req.SourceAgent}, nil
+		},
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			return &Entity{ID: nodeID, Name: "Kraklabs", Kind: "company"}, nil
 		},
 		AddRelationshipFunc: func(ctx context.Context, edgeType string, fields map[string]string) error {
 			relCalls = append(relCalls, fields)
@@ -151,9 +154,12 @@ func TestBulkStore_CrossBatchRefOutOfBounds(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("BulkStore() returned error: %s", result.Text)
 	}
-	// Should store the fact but skip the unresolvable relationship.
+	// Should store the fact but report the unresolvable relationship as an error.
 	if !strings.Contains(result.Text, "Stored 1 items") {
 		t.Errorf("expected 'Stored 1 items', got: %s", result.Text)
+	}
+	if !strings.Contains(result.Text, "target_ref 99 is out of bounds") {
+		t.Errorf("expected out-of-bounds error in output, got: %s", result.Text)
 	}
 }
 
@@ -262,6 +268,9 @@ func TestBulkStore_WithInvalidation(t *testing.T) {
 func TestBulkStore_WithDirectRelationship(t *testing.T) {
 	relCount := 0
 	mock := &MockQuerier{
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			return &Entity{ID: nodeID, Name: "Existing", Kind: "company"}, nil
+		},
 		AddRelationshipFunc: func(ctx context.Context, edgeType string, fields map[string]string) error {
 			relCount++
 			return nil
@@ -320,7 +329,7 @@ func TestBulkStore_SingleFact(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("BulkStore() returned error: %s", result.Text)
 	}
-	if !strings.Contains(result.Text, "Stored 1 items: 1 facts") {
+	if !strings.Contains(result.Text, "Stored 1 items: 1 fact") {
 		t.Errorf("expected single fact summary, got: %s", result.Text)
 	}
 	if !strings.Contains(result.Text, "fact:mock0001") {
@@ -348,7 +357,7 @@ func TestBulkStore_AllFiveTypes(t *testing.T) {
 	if !strings.Contains(result.Text, "Stored 5 items") {
 		t.Errorf("expected 'Stored 5 items', got: %s", result.Text)
 	}
-	for _, typ := range []string{"1 facts", "1 decisions", "1 entitys", "1 events", "1 topics"} {
+	for _, typ := range []string{"1 fact", "1 decision", "1 entity", "1 event", "1 topic"} {
 		if !strings.Contains(result.Text, typ) {
 			t.Errorf("expected %q in output, got: %s", typ, result.Text)
 		}

@@ -84,12 +84,16 @@ func List(ctx context.Context, client Querier, args map[string]any) (*ToolResult
 func formatNodeTable(sb *strings.Builder, nodeType string, nodes []any, offset int) {
 	switch nodeType {
 	case "fact":
-		sb.WriteString("| # | ID | Content | Category | Confidence | Created |\n")
-		sb.WriteString("|---|-----|---------|----------|------------|--------|\n")
+		sb.WriteString("| # | ID | Content | Category | Confidence | Valid | Created |\n")
+		sb.WriteString("|---|-----|---------|----------|------------|-------|--------|\n")
 		for i, node := range nodes {
 			if f, ok := node.(*Fact); ok {
-				fmt.Fprintf(sb, "| %d | %s | %s | %s | %.1f | %s |\n",
-					offset+i+1, f.ID, Truncate(f.Content, 50), f.Category, f.Confidence, FormatTime(f.CreatedAt))
+				valid := "yes"
+				if !f.Valid {
+					valid = "no"
+				}
+				fmt.Fprintf(sb, "| %d | %s | %s | %s | %.1f | %s | %s |\n",
+					offset+i+1, f.ID, Truncate(f.Content, 50), f.Category, f.Confidence, valid, FormatTime(f.CreatedAt))
 			}
 		}
 

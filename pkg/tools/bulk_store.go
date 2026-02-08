@@ -103,7 +103,7 @@ func bulkProcessRelationships(ctx context.Context, client Querier, itemSlice []a
 		}
 
 		if rels, ok := itemArgs["relationships"]; ok && rels != nil {
-			resolved := resolveBatchRefs(rels, stored)
+			resolved := resolveBatchRefs(rels, stored, &errors, i)
 			if msg := storeRelationships(ctx, client, item.nodeID, resolved); msg != "" {
 				relMessages = append(relMessages, fmt.Sprintf("item[%d]:\n%s", i, msg))
 			}
@@ -120,7 +120,7 @@ func bulkFormatOutput(stored []bulkItem, typeCounts map[string]int, totalStored 
 	var parts []string
 	for _, nt := range []string{"fact", "decision", "entity", "event", "topic"} {
 		if c := typeCounts[nt]; c > 0 {
-			parts = append(parts, fmt.Sprintf("%d %ss", c, nt))
+			parts = append(parts, pluralizeNodeType(nt, c))
 		}
 	}
 	sb.WriteString(fmt.Sprintf("Stored %d items: %s\n", totalStored, strings.Join(parts, ", ")))
@@ -150,8 +150,8 @@ func bulkFormatOutput(stored []bulkItem, typeCounts map[string]int, totalStored 
 }
 
 // resolveBatchRefs replaces target_ref index references in relationships with actual IDs
-// from previously stored items in the same batch.
-func resolveBatchRefs(rels any, stored []bulkItem) []any {
+// from previously stored items in the same batch. Errors for invalid refs are appended to errs.
+func resolveBatchRefs(rels any, stored []bulkItem, errs *[]string, itemIdx int) []any {
 	relSlice, ok := rels.([]any)
 	if !ok {
 		return nil
@@ -165,7 +165,12 @@ func resolveBatchRefs(rels any, stored []bulkItem) []any {
 		// Check for target_ref (cross-batch index reference).
 		if refIdx, hasRef := relMap["target_ref"]; hasRef {
 			idx := toInt(refIdx)
-			if idx < 0 || idx >= len(stored) || stored[idx].nodeID == "" {
+			if idx < 0 || idx >= len(stored) {
+				*errs = append(*errs, fmt.Sprintf("item[%d]: target_ref %d is out of bounds (batch has %d items)", itemIdx, idx, len(stored)))
+				continue
+			}
+			if stored[idx].nodeID == "" {
+				*errs = append(*errs, fmt.Sprintf("item[%d]: target_ref %d references a failed item", itemIdx, idx))
 				continue
 			}
 			// Copy the map and replace target_ref with the resolved target_id.
@@ -179,6 +184,17 @@ func resolveBatchRefs(rels any, stored []bulkItem) []any {
 		}
 	}
 	return resolved
+}
+
+// pluralizeNodeType returns a count + pluralized node type string.
+func pluralizeNodeType(nt string, count int) string {
+	if count == 1 {
+		return "1 " + nt
+	}
+	if nt == "entity" {
+		return fmt.Sprintf("%d entities", count)
+	}
+	return fmt.Sprintf("%d %ss", count, nt)
 }
 
 // toInt converts a JSON number to int. JSON numbers from map[string]any are float64.

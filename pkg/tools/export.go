@@ -64,8 +64,8 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 	// Export facts
 	if data.Facts != nil {
 		for _, f := range data.Facts {
-			sb.WriteString(fmt.Sprintf(":put mie_fact { id: %q, content: %q, category: %q, confidence: %f, source_agent: %q, source_conversation: %q, valid: %s, created_at: %d, updated_at: %d }\n",
-				f.ID, f.Content, f.Category, f.Confidence, f.SourceAgent, f.SourceConversation, boolToDatalog(f.Valid), f.CreatedAt, f.UpdatedAt))
+			sb.WriteString(fmt.Sprintf(":put mie_fact { id: '%s', content: '%s', category: '%s', confidence: %f, source_agent: '%s', source_conversation: '%s', valid: %s, created_at: %d, updated_at: %d }\n",
+				escapeForDatalog(f.ID), escapeForDatalog(f.Content), escapeForDatalog(f.Category), f.Confidence, escapeForDatalog(f.SourceAgent), escapeForDatalog(f.SourceConversation), boolToDatalog(f.Valid), f.CreatedAt, f.UpdatedAt))
 		}
 		sb.WriteString("\n")
 	}
@@ -73,8 +73,8 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 	// Export decisions
 	if data.Decisions != nil {
 		for _, d := range data.Decisions {
-			sb.WriteString(fmt.Sprintf(":put mie_decision { id: %q, title: %q, rationale: %q, alternatives: %q, context: %q, source_agent: %q, source_conversation: %q, status: %q, created_at: %d, updated_at: %d }\n",
-				d.ID, d.Title, d.Rationale, d.Alternatives, d.Context, d.SourceAgent, d.SourceConversation, d.Status, d.CreatedAt, d.UpdatedAt))
+			sb.WriteString(fmt.Sprintf(":put mie_decision { id: '%s', title: '%s', rationale: '%s', alternatives: '%s', context: '%s', source_agent: '%s', source_conversation: '%s', status: '%s', created_at: %d, updated_at: %d }\n",
+				escapeForDatalog(d.ID), escapeForDatalog(d.Title), escapeForDatalog(d.Rationale), escapeForDatalog(d.Alternatives), escapeForDatalog(d.Context), escapeForDatalog(d.SourceAgent), escapeForDatalog(d.SourceConversation), escapeForDatalog(d.Status), d.CreatedAt, d.UpdatedAt))
 		}
 		sb.WriteString("\n")
 	}
@@ -82,8 +82,8 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 	// Export entities
 	if data.Entities != nil {
 		for _, e := range data.Entities {
-			sb.WriteString(fmt.Sprintf(":put mie_entity { id: %q, name: %q, kind: %q, description: %q, source_agent: %q, created_at: %d, updated_at: %d }\n",
-				e.ID, e.Name, e.Kind, e.Description, e.SourceAgent, e.CreatedAt, e.UpdatedAt))
+			sb.WriteString(fmt.Sprintf(":put mie_entity { id: '%s', name: '%s', kind: '%s', description: '%s', source_agent: '%s', created_at: %d, updated_at: %d }\n",
+				escapeForDatalog(e.ID), escapeForDatalog(e.Name), escapeForDatalog(e.Kind), escapeForDatalog(e.Description), escapeForDatalog(e.SourceAgent), e.CreatedAt, e.UpdatedAt))
 		}
 		sb.WriteString("\n")
 	}
@@ -91,8 +91,8 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 	// Export events
 	if data.Events != nil {
 		for _, ev := range data.Events {
-			sb.WriteString(fmt.Sprintf(":put mie_event { id: %q, title: %q, description: %q, event_date: %q, source_agent: %q, source_conversation: %q, created_at: %d, updated_at: %d }\n",
-				ev.ID, ev.Title, ev.Description, ev.EventDate, ev.SourceAgent, ev.SourceConversation, ev.CreatedAt, ev.UpdatedAt))
+			sb.WriteString(fmt.Sprintf(":put mie_event { id: '%s', title: '%s', description: '%s', event_date: '%s', source_agent: '%s', source_conversation: '%s', created_at: %d, updated_at: %d }\n",
+				escapeForDatalog(ev.ID), escapeForDatalog(ev.Title), escapeForDatalog(ev.Description), escapeForDatalog(ev.EventDate), escapeForDatalog(ev.SourceAgent), escapeForDatalog(ev.SourceConversation), ev.CreatedAt, ev.UpdatedAt))
 		}
 		sb.WriteString("\n")
 	}
@@ -100,8 +100,8 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 	// Export topics
 	if data.Topics != nil {
 		for _, t := range data.Topics {
-			sb.WriteString(fmt.Sprintf(":put mie_topic { id: %q, name: %q, description: %q, created_at: %d, updated_at: %d }\n",
-				t.ID, t.Name, t.Description, t.CreatedAt, t.UpdatedAt))
+			sb.WriteString(fmt.Sprintf(":put mie_topic { id: '%s', name: '%s', description: '%s', created_at: %d, updated_at: %d }\n",
+				escapeForDatalog(t.ID), escapeForDatalog(t.Name), escapeForDatalog(t.Description), t.CreatedAt, t.UpdatedAt))
 		}
 		sb.WriteString("\n")
 	}
@@ -112,6 +112,16 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 	}
 
 	return NewResult(output), nil
+}
+
+// escapeForDatalog escapes a string for use in CozoDB single-quoted Datalog literals.
+func escapeForDatalog(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return s
 }
 
 func boolToDatalog(b bool) string {

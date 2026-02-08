@@ -218,6 +218,9 @@ func TestStore_WithInvalidation(t *testing.T) {
 func TestStore_WithRelationships(t *testing.T) {
 	relCount := 0
 	mock := &MockQuerier{
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			return &Entity{ID: nodeID, Name: "Kraklabs", Kind: "company"}, nil
+		},
 		AddRelationshipFunc: func(ctx context.Context, edgeType string, fields map[string]string) error {
 			relCount++
 			return nil
@@ -270,6 +273,36 @@ func TestStore_FactDefaultCategory(t *testing.T) {
 	}
 	if capturedReq.SourceAgent != "unknown" {
 		t.Errorf("Default source_agent should be 'unknown', got %q", capturedReq.SourceAgent)
+	}
+}
+
+func TestStore_FactInvalidCategory(t *testing.T) {
+	mock := &MockQuerier{}
+	result, _ := Store(context.Background(), mock, map[string]any{
+		"type":     "fact",
+		"content":  "Test",
+		"category": "invalid_cat",
+	})
+	if !result.IsError {
+		t.Error("Store() should return error for invalid category")
+	}
+	if !strings.Contains(result.Text, "invalid category") {
+		t.Errorf("Error should mention invalid category, got: %s", result.Text)
+	}
+}
+
+func TestStore_FactInvalidConfidence(t *testing.T) {
+	mock := &MockQuerier{}
+	result, _ := Store(context.Background(), mock, map[string]any{
+		"type":       "fact",
+		"content":    "Test",
+		"confidence": 1.5,
+	})
+	if !result.IsError {
+		t.Error("Store() should return error for invalid confidence")
+	}
+	if !strings.Contains(result.Text, "confidence must be between") {
+		t.Errorf("Error should mention confidence range, got: %s", result.Text)
 	}
 }
 
