@@ -60,15 +60,23 @@ func Conflicts(ctx context.Context, client Querier, args map[string]any) (*ToolR
 		sb.WriteString(fmt.Sprintf("- [%s] %q (%s, confidence: %.1f)\n",
 			c.FactB.ID, Truncate(c.FactB.Content, 80), c.FactB.Category, c.FactB.Confidence))
 
-		// Recommendation
-		if c.FactA.CreatedAt < c.FactB.CreatedAt {
-			sb.WriteString(fmt.Sprintf("  Recommendation: The newer fact [%s] likely supersedes the older one [%s].\n\n",
-				c.FactB.ID, c.FactA.ID))
-		} else if c.FactB.CreatedAt < c.FactA.CreatedAt {
-			sb.WriteString(fmt.Sprintf("  Recommendation: The newer fact [%s] likely supersedes the older one [%s].\n\n",
-				c.FactA.ID, c.FactB.ID))
+		// Recommendation based on similarity tier
+		similarityPct := c.Similarity * 100
+		if similarityPct >= 90 && c.FactA.Category == c.FactB.Category {
+			// High similarity with same category: suggest supersedence
+			if c.FactA.CreatedAt < c.FactB.CreatedAt {
+				sb.WriteString(fmt.Sprintf("  Recommendation: The newer fact [%s] likely supersedes the older one [%s].\n\n",
+					c.FactB.ID, c.FactA.ID))
+			} else if c.FactB.CreatedAt < c.FactA.CreatedAt {
+				sb.WriteString(fmt.Sprintf("  Recommendation: The newer fact [%s] likely supersedes the older one [%s].\n\n",
+					c.FactA.ID, c.FactB.ID))
+			} else {
+				sb.WriteString("  Recommendation: Review both facts and invalidate the incorrect one.\n\n")
+			}
+		} else if similarityPct >= 75 {
+			sb.WriteString("  Recommendation: These facts may be related or contradictory. Review and invalidate if needed.\n\n")
 		} else {
-			sb.WriteString("  Recommendation: Review both facts and invalidate the incorrect one.\n\n")
+			sb.WriteString("  Recommendation: These facts are semantically similar but may not be contradictory.\n\n")
 		}
 	}
 

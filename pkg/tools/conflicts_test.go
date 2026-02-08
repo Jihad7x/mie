@@ -112,14 +112,14 @@ func TestConflicts_EmbeddingsDisabled(t *testing.T) {
 	}
 }
 
-func TestConflicts_Recommendation(t *testing.T) {
+func TestConflicts_RecommendationHighSimilarity(t *testing.T) {
 	mock := &MockQuerier{
 		DetectConflictsFunc: func(ctx context.Context, opts ConflictOptions) ([]Conflict, error) {
 			return []Conflict{
 				{
-					FactA:      Fact{ID: "fact:old", Content: "Old fact", CreatedAt: 1000},
-					FactB:      Fact{ID: "fact:new", Content: "New fact", CreatedAt: 2000},
-					Similarity: 0.88,
+					FactA:      Fact{ID: "fact:old", Content: "Old fact", Category: "technical", CreatedAt: 1000},
+					FactB:      Fact{ID: "fact:new", Content: "New fact", Category: "technical", CreatedAt: 2000},
+					Similarity: 0.92,
 				},
 			}, nil
 		},
@@ -128,6 +128,26 @@ func TestConflicts_Recommendation(t *testing.T) {
 
 	result, _ := Conflicts(context.Background(), mock, map[string]any{})
 	if !strings.Contains(result.Text, "newer fact") {
-		t.Error("Conflicts() should recommend based on creation time")
+		t.Error("High similarity + same category should recommend newer supersedes older")
+	}
+}
+
+func TestConflicts_RecommendationMediumSimilarity(t *testing.T) {
+	mock := &MockQuerier{
+		DetectConflictsFunc: func(ctx context.Context, opts ConflictOptions) ([]Conflict, error) {
+			return []Conflict{
+				{
+					FactA:      Fact{ID: "fact:a", Content: "Fact A", Category: "technical", CreatedAt: 1000},
+					FactB:      Fact{ID: "fact:b", Content: "Fact B", Category: "technical", CreatedAt: 2000},
+					Similarity: 0.82,
+				},
+			}, nil
+		},
+		EmbeddingsEnabledFunc: func() bool { return true },
+	}
+
+	result, _ := Conflicts(context.Background(), mock, map[string]any{})
+	if !strings.Contains(result.Text, "may be related or contradictory") {
+		t.Error("Medium similarity should suggest review for potential contradiction")
 	}
 }
