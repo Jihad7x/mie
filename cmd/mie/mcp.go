@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "0.1.3"
+	mcpVersion    = "0.1.4"
 	mcpServerName = "mie"
 )
 

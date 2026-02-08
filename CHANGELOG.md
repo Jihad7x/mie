@@ -5,6 +5,14 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-02-08
+
+### Fixed
+
+- `confidence=0` silently replaced with default 0.8 due to dual-layer validation bug in `writer.go` (`<= 0` instead of `< 0`)
+- MCP schema for confidence parameter declared `"default": 0.8`, causing some clients to omit zero values
+- Confidence display format `%.1f` rounded low values like 0.01 to "0.0" — now uses `%g` for full precision
+
 ## [0.1.3] - 2026-02-08
 
 ### Fixed
@@ -48,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[0.1.4]: https://github.com/kraklabs/mie/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/kraklabs/mie/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/kraklabs/mie/compare/v0.1.0...v0.1.2
 [0.1.0]: https://github.com/kraklabs/mie/releases/tag/v0.1.0

@@ -146,7 +146,7 @@ func TestMCPInitialize(t *testing.T) {
 	serverInfo, ok := result["serverInfo"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "mie", serverInfo["name"])
-	assert.Equal(t, "0.1.3", serverInfo["version"])
+	assert.Equal(t, "0.1.4", serverInfo["version"])
 
 	caps, ok := result["capabilities"].(map[string]any)
 	require.True(t, ok)
