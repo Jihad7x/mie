@@ -103,70 +103,53 @@ func runInterview(cfg *Config, globals GlobalFlags) {
 	ctx := context.Background()
 	reader := bufio.NewReader(os.Stdin)
 
-	var entityCount, factCount, topicCount int
-	var topicIDs []string
+	counts := collectInterviewAnswers(ctx, client, reader)
+
+	if !globals.Quiet {
+		fmt.Println()
+		fmt.Printf("Stored %d entities, %d facts, %d topics\n", counts.entities, counts.facts, counts.topics)
+		fmt.Println("Your memory graph is ready! Run 'mie --mcp' to start the server.")
+	}
+}
+
+type interviewCounts struct {
+	entities, facts, topics int
+}
+
+func collectInterviewAnswers(ctx context.Context, client *memory.Client, reader *bufio.Reader) interviewCounts {
+	var c interviewCounts
 
 	fmt.Println()
 	fmt.Println("Let's set up your memory graph.")
 	fmt.Println()
 
-	// Project name
-	if name := prompt(reader, "Project name?"); name != "" {
-		_, err := client.StoreEntity(ctx, tools.StoreEntityRequest{
-			Name:        name,
-			Kind:        "project",
-			Description: name + " project",
-			SourceAgent: "mie-init",
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to store project entity: %v\n", err)
-		} else {
-			entityCount++
-		}
+	entityQuestions := []struct {
+		question    string
+		kind        string
+		description string
+		allowNone   bool
+	}{
+		{"Project name?", "project", " project", false},
+		{"Primary language? (e.g., Go, Python, TypeScript)", "technology", " programming language", false},
+		{"Database? (e.g., PostgreSQL, MongoDB, none)", "technology", " database", true},
+		{"Cloud provider? (e.g., AWS, GCP, none)", "technology", " cloud provider", true},
 	}
 
-	// Primary language
-	if lang := prompt(reader, "Primary language? (e.g., Go, Python, TypeScript)"); lang != "" {
-		_, err := client.StoreEntity(ctx, tools.StoreEntityRequest{
-			Name:        lang,
-			Kind:        "technology",
-			Description: lang + " programming language",
-			SourceAgent: "mie-init",
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to store language entity: %v\n", err)
-		} else {
-			entityCount++
+	for _, q := range entityQuestions {
+		ans := prompt(reader, q.question)
+		if ans == "" || (q.allowNone && isNone(ans)) {
+			continue
 		}
-	}
-
-	// Database
-	if db := prompt(reader, "Database? (e.g., PostgreSQL, MongoDB, none)"); db != "" && !isNone(db) {
 		_, err := client.StoreEntity(ctx, tools.StoreEntityRequest{
-			Name:        db,
-			Kind:        "technology",
-			Description: db + " database",
+			Name:        ans,
+			Kind:        q.kind,
+			Description: ans + q.description,
 			SourceAgent: "mie-init",
 		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to store database entity: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed to store %s entity: %v\n", q.kind, err)
 		} else {
-			entityCount++
-		}
-	}
-
-	// Cloud provider
-	if cloud := prompt(reader, "Cloud provider? (e.g., AWS, GCP, none)"); cloud != "" && !isNone(cloud) {
-		_, err := client.StoreEntity(ctx, tools.StoreEntityRequest{
-			Name:        cloud,
-			Kind:        "technology",
-			Description: cloud + " cloud provider",
-			SourceAgent: "mie-init",
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to store cloud entity: %v\n", err)
-		} else {
-			entityCount++
+			c.entities++
 		}
 	}
 
@@ -181,7 +164,7 @@ func runInterview(cfg *Config, globals GlobalFlags) {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to store team size fact: %v\n", err)
 		} else {
-			factCount++
+			c.facts++
 		}
 	}
 
@@ -192,26 +175,19 @@ func runInterview(cfg *Config, globals GlobalFlags) {
 			if t == "" {
 				continue
 			}
-			tp, err := client.StoreTopic(ctx, tools.StoreTopicRequest{
+			_, err := client.StoreTopic(ctx, tools.StoreTopicRequest{
 				Name:        t,
 				Description: t + " topic",
 			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to store topic %q: %v\n", t, err)
 			} else {
-				topicCount++
-				topicIDs = append(topicIDs, tp.ID)
+				c.topics++
 			}
 		}
 	}
 
-	_ = topicIDs // relationships could be added here in the future
-
-	if !globals.Quiet {
-		fmt.Println()
-		fmt.Printf("Stored %d entities, %d facts, %d topics\n", entityCount, factCount, topicCount)
-		fmt.Println("Your memory graph is ready! Run 'mie --mcp' to start the server.")
-	}
+	return c
 }
 
 // prompt prints a question and reads a trimmed line from the reader.

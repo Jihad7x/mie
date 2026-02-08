@@ -241,7 +241,6 @@ func (c *Config) applyEnvOverrides() {
 			c.Embedding.Provider = "nomic"
 		}
 	}
-
 }
 
 // getEnv retrieves an environment variable or returns a fallback value if not set.

@@ -28,7 +28,6 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, 4, cfg.Embedding.Workers)
 	assert.NotEmpty(t, cfg.Embedding.BaseURL)
 	assert.NotEmpty(t, cfg.Embedding.Model)
-
 }
 
 func TestConfigEnvOverrides(t *testing.T) {
@@ -94,7 +93,6 @@ embedding:
 	assert.Equal(t, "text-embedding-3-small", cfg.Embedding.Model)
 	assert.Equal(t, 1536, cfg.Embedding.Dimensions)
 	assert.Equal(t, 2, cfg.Embedding.Workers)
-
 }
 
 func TestConfigYAMLInvalidVersion(t *testing.T) {
