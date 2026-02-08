@@ -29,9 +29,11 @@ func Query(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 
 	// Optional filters for search results.
 	filters := searchFilters{
-		Category:  GetStringArg(args, "category", ""),
-		Kind:      GetStringArg(args, "kind", ""),
-		ValidOnly: GetBoolArg(args, "valid_only", true),
+		Category:      GetStringArg(args, "category", ""),
+		Kind:          GetStringArg(args, "kind", ""),
+		ValidOnly:     GetBoolArg(args, "valid_only", true),
+		CreatedAfter:  int64(GetFloat64Arg(args, "created_after", 0)),
+		CreatedBefore: int64(GetFloat64Arg(args, "created_before", 0)),
 	}
 
 	var result *ToolResult
@@ -57,16 +59,17 @@ func Query(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 
 // searchFilters holds optional filters for search results.
 type searchFilters struct {
-	Category  string // Filter facts by category.
-	Kind      string // Filter entities by kind.
-	ValidOnly bool   // Only return valid facts.
+	Category      string // Filter facts by category.
+	Kind          string // Filter entities by kind.
+	ValidOnly     bool   // Only return valid facts.
+	CreatedAfter  int64  // Only return nodes created at or after this unix timestamp.
+	CreatedBefore int64  // Only return nodes created at or before this unix timestamp.
 }
 
-// applySearchFilters filters search results by category, kind, and valid_only.
+// applySearchFilters filters search results by category, kind, valid_only, and time range.
 func applySearchFilters(results []SearchResult, f searchFilters) []SearchResult {
-	if f.Category == "" && f.Kind == "" && f.ValidOnly {
-		// ValidOnly=true is the default; only filter if there's something specific.
-		// Check if any fact is invalid.
+	needsFiltering := f.Category != "" || f.Kind != "" || f.CreatedAfter > 0 || f.CreatedBefore > 0
+	if !needsFiltering && f.ValidOnly {
 		hasInvalid := false
 		for _, r := range results {
 			if fact, ok := r.Metadata.(*Fact); ok && !fact.Valid {
@@ -81,22 +84,43 @@ func applySearchFilters(results []SearchResult, f searchFilters) []SearchResult 
 
 	filtered := make([]SearchResult, 0, len(results))
 	for _, r := range results {
-		switch m := r.Metadata.(type) {
-		case *Fact:
-			if f.ValidOnly && !m.Valid {
-				continue
-			}
-			if f.Category != "" && m.Category != f.Category {
-				continue
-			}
-		case *Entity:
-			if f.Kind != "" && m.Kind != f.Kind {
-				continue
-			}
+		if !matchesSearchFilters(r, f) {
+			continue
 		}
 		filtered = append(filtered, r)
 	}
 	return filtered
+}
+
+// matchesSearchFilters returns true if a single result passes all filters.
+func matchesSearchFilters(r SearchResult, f searchFilters) bool {
+	var createdAt int64
+	switch m := r.Metadata.(type) {
+	case *Fact:
+		if f.ValidOnly && !m.Valid {
+			return false
+		}
+		if f.Category != "" && m.Category != f.Category {
+			return false
+		}
+		createdAt = m.CreatedAt
+	case *Entity:
+		if f.Kind != "" && m.Kind != f.Kind {
+			return false
+		}
+		createdAt = m.CreatedAt
+	case *Decision:
+		createdAt = m.CreatedAt
+	case *Event:
+		createdAt = m.CreatedAt
+	}
+	if f.CreatedAfter > 0 && createdAt < f.CreatedAfter {
+		return false
+	}
+	if f.CreatedBefore > 0 && createdAt > f.CreatedBefore {
+		return false
+	}
+	return true
 }
 
 func querySemanticMode(ctx context.Context, client Querier, query string, nodeTypes []string, limit int, filters searchFilters) (*ToolResult, error) {

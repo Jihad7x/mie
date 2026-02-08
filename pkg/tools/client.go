@@ -188,16 +188,18 @@ type SearchResult struct {
 
 // ListOptions configures listing of nodes.
 type ListOptions struct {
-	NodeType  string `json:"node_type"`
-	Category  string `json:"category"`
-	Kind      string `json:"kind"`
-	Status    string `json:"status"`
-	TopicName string `json:"topic_name"`
-	ValidOnly bool   `json:"valid_only"`
-	Limit     int    `json:"limit"`
-	Offset    int    `json:"offset"`
-	SortBy    string `json:"sort_by"`
-	SortOrder string `json:"sort_order"`
+	NodeType     string `json:"node_type"`
+	Category     string `json:"category"`
+	Kind         string `json:"kind"`
+	Status       string `json:"status"`
+	TopicName    string `json:"topic_name"`
+	ValidOnly    bool   `json:"valid_only"`
+	CreatedAfter int64  `json:"created_after"`
+	CreatedBefore int64 `json:"created_before"`
+	Limit        int    `json:"limit"`
+	Offset       int    `json:"offset"`
+	SortBy       string `json:"sort_by"`
+	SortOrder    string `json:"sort_order"`
 }
 
 // --- Conflict types ---

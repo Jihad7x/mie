@@ -775,6 +775,14 @@ func (s *mcpServer) getTools() []mcpTool {
 						"type":    "boolean",
 						"default": true,
 					},
+					"created_after": map[string]any{
+						"type":        "number",
+						"description": "Only include nodes created at or after this unix timestamp",
+					},
+					"created_before": map[string]any{
+						"type":        "number",
+						"description": "Only include nodes created at or before this unix timestamp",
+					},
 					"node_id": map[string]any{
 						"type":        "string",
 						"description": "Node ID for graph traversal mode",
@@ -874,6 +882,14 @@ func (s *mcpServer) getTools() []mcpTool {
 						"type":    "number",
 						"minimum": 0,
 						"default": 0,
+					},
+					"created_after": map[string]any{
+						"type":        "number",
+						"description": "Only include nodes created at or after this unix timestamp",
+					},
+					"created_before": map[string]any{
+						"type":        "number",
+						"description": "Only include nodes created at or before this unix timestamp",
 					},
 					"sort_by": map[string]any{
 						"type":        "string",

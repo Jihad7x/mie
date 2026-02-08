@@ -38,16 +38,18 @@ func List(ctx context.Context, client Querier, args map[string]any) (*ToolResult
 	}
 
 	opts := ListOptions{
-		NodeType:  nodeType,
-		Category:  GetStringArg(args, "category", ""),
-		Kind:      GetStringArg(args, "kind", ""),
-		Status:    GetStringArg(args, "status", ""),
-		TopicName: GetStringArg(args, "topic", ""),
-		ValidOnly: GetBoolArg(args, "valid_only", true),
-		Limit:     limit,
-		Offset:    offset,
-		SortBy:    GetStringArg(args, "sort_by", "created_at"),
-		SortOrder: GetStringArg(args, "sort_order", "desc"),
+		NodeType:      nodeType,
+		Category:      GetStringArg(args, "category", ""),
+		Kind:          GetStringArg(args, "kind", ""),
+		Status:        GetStringArg(args, "status", ""),
+		TopicName:     GetStringArg(args, "topic", ""),
+		ValidOnly:     GetBoolArg(args, "valid_only", true),
+		CreatedAfter:  int64(GetFloat64Arg(args, "created_after", 0)),
+		CreatedBefore: int64(GetFloat64Arg(args, "created_before", 0)),
+		Limit:         limit,
+		Offset:        offset,
+		SortBy:        GetStringArg(args, "sort_by", "created_at"),
+		SortOrder:     GetStringArg(args, "sort_order", "desc"),
 	}
 
 	nodes, total, err := client.ListNodes(ctx, opts)

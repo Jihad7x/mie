@@ -264,6 +264,15 @@ func buildListConditions(opts tools.ListOptions) []string {
 			conditions = append(conditions, fmt.Sprintf(`kind = '%s'`, escapeDatalog(opts.Kind)))
 		}
 	}
+
+	// Time-range filtering (applies to all node types).
+	if opts.CreatedAfter > 0 {
+		conditions = append(conditions, fmt.Sprintf(`created_at >= %d`, opts.CreatedAfter))
+	}
+	if opts.CreatedBefore > 0 {
+		conditions = append(conditions, fmt.Sprintf(`created_at <= %d`, opts.CreatedBefore))
+	}
+
 	return conditions
 }
 
@@ -287,14 +296,22 @@ func columnsForNodeType(nodeType string) string {
 
 // countNodes executes a count query for the given table and conditions.
 func (r *Reader) countNodes(ctx context.Context, table string, conditions []string, condStr string) (int, error) {
-	var countCols []string
-	countCols = append(countCols, "id")
+	colSet := map[string]bool{"id": true}
 	for _, cond := range conditions {
-		if eqIdx := strings.Index(cond, " = "); eqIdx > 0 {
-			col := strings.TrimSpace(cond[:eqIdx])
-			countCols = append(countCols, col)
+		// Extract column name from conditions like "col = 'val'", "col >= N", "col <= N".
+		for _, op := range []string{" = ", " >= ", " <= "} {
+			if idx := strings.Index(cond, op); idx > 0 {
+				col := strings.TrimSpace(cond[:idx])
+				colSet[col] = true
+				break
+			}
 		}
 	}
+	countCols := make([]string, 0, len(colSet))
+	for col := range colSet {
+		countCols = append(countCols, col)
+	}
+	sort.Strings(countCols)
 	countScript := fmt.Sprintf(`?[count(id)] := *%s { %s }%s`,
 		table, strings.Join(countCols, ", "), condStr)
 	countResult, err := r.backend.Query(ctx, countScript)
