@@ -206,6 +206,14 @@ func (r *Reader) ListNodes(ctx context.Context, opts tools.ListOptions) ([]any, 
 	if sortBy == "" {
 		sortBy = "created_at"
 	}
+	// Validate sortBy against allowlist to prevent injection.
+	validSortColumns := map[string]bool{
+		"created_at": true, "updated_at": true, "name": true,
+		"id": true, "content": true, "title": true,
+	}
+	if !validSortColumns[sortBy] {
+		sortBy = "created_at"
+	}
 	sortOrder := sortBy
 	if opts.SortOrder != "asc" {
 		sortOrder = "-" + sortBy
@@ -760,7 +768,54 @@ func (r *Reader) ExportGraph(ctx context.Context, opts tools.ExportOptions) (*to
 		}
 	}
 
+	// Export relationships (edges) across all edge tables.
+	edges, totalEdges := r.exportEdges(ctx)
+	if totalEdges > 0 {
+		export.Edges = edges
+		export.Stats["edges"] = totalEdges
+	}
+
 	return export, nil
+}
+
+// exportEdges exports all relationship edges from the graph.
+func (r *Reader) exportEdges(ctx context.Context) (map[string]any, int) {
+	edges := make(map[string]any)
+	totalEdges := 0
+
+	for tableName, cols := range ValidEdgeTables {
+		if len(cols) < 2 {
+			continue
+		}
+		colList := strings.Join(cols, ", ")
+		script := fmt.Sprintf(`?[%s] := *%s { %s }`, colList, tableName, colList)
+
+		qr, err := r.backend.Query(ctx, script)
+		if err != nil {
+			r.logger.Warn("export edges failed", "table", tableName, "error", err)
+			continue
+		}
+		if len(qr.Rows) == 0 {
+			continue
+		}
+
+		var rows []map[string]string
+		for _, row := range qr.Rows {
+			entry := make(map[string]string)
+			for i, col := range cols {
+				if i < len(row) {
+					entry[col] = toString(row[i])
+				}
+			}
+			rows = append(rows, entry)
+		}
+		// Use short name (strip "mie_" prefix) as key.
+		shortName := strings.TrimPrefix(tableName, "mie_")
+		edges[shortName] = rows
+		totalEdges += len(rows)
+	}
+
+	return edges, totalEdges
 }
 
 // --- Export helpers ---

@@ -151,7 +151,7 @@ func storeFact(ctx context.Context, client Querier, args map[string]any, sourceA
 		category = "general"
 	}
 	confidence := GetFloat64Arg(args, "confidence", 0.8)
-	if confidence <= 0 || confidence > 1.0 {
+	if confidence < 0 || confidence > 1.0 {
 		confidence = 0.8
 	}
 	return client.StoreFact(ctx, StoreFactRequest{

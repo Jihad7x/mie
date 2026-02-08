@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 
 	"github.com/kraklabs/mie/pkg/storage"
 	"github.com/kraklabs/mie/pkg/tools"
@@ -36,10 +37,14 @@ func (cd *ConflictDetector) DetectConflicts(ctx context.Context, opts tools.Conf
 		return nil, fmt.Errorf("conflict detection requires embeddings to be enabled")
 	}
 
-	threshold := opts.Threshold
-	if threshold <= 0 {
-		threshold = 0.15 // Default: cosine distance < 0.15 means ~85% similarity
+	// Threshold is a similarity value (0.85 = 85% similar).
+	// Convert to cosine distance for HNSW queries (distance = 1.0 - similarity).
+	similarity := opts.Threshold
+	if similarity <= 0 || similarity > 1.0 {
+		similarity = 0.85 // Default: 85% similarity
 	}
+	distanceThreshold := 1.0 - similarity
+
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20
@@ -83,7 +88,7 @@ func (cd *ConflictDetector) DetectConflicts(ctx context.Context, opts tools.Conf
 
 		vecStr := formatVector(queryEmb)
 
-		// Search for nearest neighbors
+		// Search for nearest neighbors (applying category filter if set)
 		script := fmt.Sprintf(
 			`?[neighbor_id, content, category, confidence, source_agent, source_conversation, created_at, updated_at, distance] :=
     ~mie_fact_embedding:fact_embedding_idx { fact_id | query: q, k: 10, ef: 200, bind_distance: distance },
@@ -92,9 +97,9 @@ func (cd *ConflictDetector) DetectConflicts(ctx context.Context, opts tools.Conf
     valid = true,
     neighbor_id = fact_id,
     neighbor_id != '%s',
-    distance < %f
+    distance < %f%s
     :order distance
-    :limit 5`, vecStr, escapeDatalog(factID), threshold,
+    :limit 5`, vecStr, escapeDatalog(factID), distanceThreshold, categoryFilter,
 		)
 
 		neighbors, err := cd.backend.Query(ctx, script)
@@ -154,13 +159,9 @@ func (cd *ConflictDetector) DetectConflicts(ctx context.Context, opts tools.Conf
 	}
 
 	// Sort by similarity (highest first)
-	for i := 0; i < len(conflicts); i++ {
-		for j := i + 1; j < len(conflicts); j++ {
-			if conflicts[j].Similarity > conflicts[i].Similarity {
-				conflicts[i], conflicts[j] = conflicts[j], conflicts[i]
-			}
-		}
-	}
+	sort.Slice(conflicts, func(i, j int) bool {
+		return conflicts[j].Similarity < conflicts[i].Similarity
+	})
 
 	if len(conflicts) > limit {
 		conflicts = conflicts[:limit]
