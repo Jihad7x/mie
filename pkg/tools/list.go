@@ -86,8 +86,8 @@ func formatNodeTable(sb *strings.Builder, nodeType string, nodes []any, offset i
 		sb.WriteString("|---|-----|---------|----------|------------|--------|\n")
 		for i, node := range nodes {
 			if f, ok := node.(*Fact); ok {
-				fmt.Fprintf(sb, "| %d | %s | %s | %s | %.1f | %d |\n",
-					offset+i+1, f.ID, Truncate(f.Content, 50), f.Category, f.Confidence, f.CreatedAt)
+				fmt.Fprintf(sb, "| %d | %s | %s | %s | %.1f | %s |\n",
+					offset+i+1, f.ID, Truncate(f.Content, 50), f.Category, f.Confidence, FormatTime(f.CreatedAt))
 			}
 		}
 
@@ -96,8 +96,8 @@ func formatNodeTable(sb *strings.Builder, nodeType string, nodes []any, offset i
 		sb.WriteString("|---|-----|-------|--------|--------|\n")
 		for i, node := range nodes {
 			if d, ok := node.(*Decision); ok {
-				fmt.Fprintf(sb, "| %d | %s | %s | %s | %d |\n",
-					offset+i+1, d.ID, Truncate(d.Title, 60), d.Status, d.CreatedAt)
+				fmt.Fprintf(sb, "| %d | %s | %s | %s | %s |\n",
+					offset+i+1, d.ID, Truncate(d.Title, 60), d.Status, FormatTime(d.CreatedAt))
 			}
 		}
 
@@ -116,8 +116,8 @@ func formatNodeTable(sb *strings.Builder, nodeType string, nodes []any, offset i
 		sb.WriteString("|---|-----|-------|------|--------|\n")
 		for i, node := range nodes {
 			if ev, ok := node.(*Event); ok {
-				fmt.Fprintf(sb, "| %d | %s | %s | %s | %d |\n",
-					offset+i+1, ev.ID, Truncate(ev.Title, 60), ev.EventDate, ev.CreatedAt)
+				fmt.Fprintf(sb, "| %d | %s | %s | %s | %s |\n",
+					offset+i+1, ev.ID, Truncate(ev.Title, 60), ev.EventDate, FormatTime(ev.CreatedAt))
 			}
 		}
 

@@ -40,8 +40,8 @@ func formatNode(nodeID string, node any) string {
 		if n.SourceConversation != "" {
 			sb.WriteString(fmt.Sprintf("**Conversation:** %s\n", n.SourceConversation))
 		}
-		sb.WriteString(fmt.Sprintf("**Created:** %d\n", n.CreatedAt))
-		sb.WriteString(fmt.Sprintf("**Updated:** %d\n", n.UpdatedAt))
+		sb.WriteString(fmt.Sprintf("**Created:** %s\n", FormatTime(n.CreatedAt)))
+		sb.WriteString(fmt.Sprintf("**Updated:** %s\n", FormatTime(n.UpdatedAt)))
 	case *Decision:
 		sb.WriteString("**Type:** decision\n")
 		sb.WriteString(fmt.Sprintf("**Title:** %s\n", n.Title))
@@ -54,8 +54,8 @@ func formatNode(nodeID string, node any) string {
 		}
 		sb.WriteString(fmt.Sprintf("**Status:** %s\n", n.Status))
 		sb.WriteString(fmt.Sprintf("**Source:** %s\n", n.SourceAgent))
-		sb.WriteString(fmt.Sprintf("**Created:** %d\n", n.CreatedAt))
-		sb.WriteString(fmt.Sprintf("**Updated:** %d\n", n.UpdatedAt))
+		sb.WriteString(fmt.Sprintf("**Created:** %s\n", FormatTime(n.CreatedAt)))
+		sb.WriteString(fmt.Sprintf("**Updated:** %s\n", FormatTime(n.UpdatedAt)))
 	case *Entity:
 		sb.WriteString("**Type:** entity\n")
 		sb.WriteString(fmt.Sprintf("**Name:** %s\n", n.Name))
@@ -64,8 +64,8 @@ func formatNode(nodeID string, node any) string {
 			sb.WriteString(fmt.Sprintf("**Description:** %s\n", n.Description))
 		}
 		sb.WriteString(fmt.Sprintf("**Source:** %s\n", n.SourceAgent))
-		sb.WriteString(fmt.Sprintf("**Created:** %d\n", n.CreatedAt))
-		sb.WriteString(fmt.Sprintf("**Updated:** %d\n", n.UpdatedAt))
+		sb.WriteString(fmt.Sprintf("**Created:** %s\n", FormatTime(n.CreatedAt)))
+		sb.WriteString(fmt.Sprintf("**Updated:** %s\n", FormatTime(n.UpdatedAt)))
 	case *Event:
 		sb.WriteString("**Type:** event\n")
 		sb.WriteString(fmt.Sprintf("**Title:** %s\n", n.Title))
@@ -74,16 +74,16 @@ func formatNode(nodeID string, node any) string {
 		}
 		sb.WriteString(fmt.Sprintf("**Date:** %s\n", n.EventDate))
 		sb.WriteString(fmt.Sprintf("**Source:** %s\n", n.SourceAgent))
-		sb.WriteString(fmt.Sprintf("**Created:** %d\n", n.CreatedAt))
-		sb.WriteString(fmt.Sprintf("**Updated:** %d\n", n.UpdatedAt))
+		sb.WriteString(fmt.Sprintf("**Created:** %s\n", FormatTime(n.CreatedAt)))
+		sb.WriteString(fmt.Sprintf("**Updated:** %s\n", FormatTime(n.UpdatedAt)))
 	case *Topic:
 		sb.WriteString("**Type:** topic\n")
 		sb.WriteString(fmt.Sprintf("**Name:** %s\n", n.Name))
 		if n.Description != "" {
 			sb.WriteString(fmt.Sprintf("**Description:** %s\n", n.Description))
 		}
-		sb.WriteString(fmt.Sprintf("**Created:** %d\n", n.CreatedAt))
-		sb.WriteString(fmt.Sprintf("**Updated:** %d\n", n.UpdatedAt))
+		sb.WriteString(fmt.Sprintf("**Created:** %s\n", FormatTime(n.CreatedAt)))
+		sb.WriteString(fmt.Sprintf("**Updated:** %s\n", FormatTime(n.UpdatedAt)))
 	default:
 		sb.WriteString(fmt.Sprintf("%v\n", node))
 	}

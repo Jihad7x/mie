@@ -7,6 +7,7 @@ package tools
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // GetStringArg extracts a string argument from the args map, returning defaultVal if missing.
@@ -194,6 +195,15 @@ func FormatRows(rows [][]any) string {
 		}
 	}
 	return sb.String()
+}
+
+// FormatTime converts a unix timestamp to a human-readable UTC string.
+// Returns the raw number as a string if the timestamp is zero or negative.
+func FormatTime(ts int64) string {
+	if ts <= 0 {
+		return fmt.Sprintf("%d", ts)
+	}
+	return time.Unix(ts, 0).UTC().Format("2006-01-02 15:04:05")
 }
 
 // EscapeRegex escapes special regex characters for CozoDB.
