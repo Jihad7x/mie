@@ -206,13 +206,21 @@ func (r *Reader) ListNodes(ctx context.Context, opts tools.ListOptions) ([]any, 
 	if sortBy == "" {
 		sortBy = "created_at"
 	}
-	// Validate sortBy against allowlist to prevent injection.
-	validSortColumns := map[string]bool{
-		"created_at": true, "updated_at": true, "name": true,
-		"id": true, "content": true, "title": true,
+	// Valid sort columns per node type (map "name" alias to actual column).
+	validSortByType := map[string]map[string]string{
+		"fact":     {"created_at": "created_at", "updated_at": "updated_at", "id": "id", "content": "content", "name": "content"},
+		"decision": {"created_at": "created_at", "updated_at": "updated_at", "id": "id", "title": "title", "name": "title"},
+		"entity":   {"created_at": "created_at", "updated_at": "updated_at", "id": "id", "name": "name"},
+		"event":    {"created_at": "created_at", "updated_at": "updated_at", "id": "id", "title": "title", "name": "title"},
+		"topic":    {"created_at": "created_at", "updated_at": "updated_at", "id": "id", "name": "name"},
 	}
-	if !validSortColumns[sortBy] {
-		sortBy = "created_at"
+	typeMap := validSortByType[opts.NodeType]
+	if typeMap != nil {
+		if mapped, ok := typeMap[sortBy]; ok {
+			sortBy = mapped
+		} else {
+			sortBy = "created_at"
+		}
 	}
 	sortOrder := sortBy
 	if opts.SortOrder != "asc" {
@@ -636,6 +644,84 @@ func (r *Reader) GetEntityDecisions(ctx context.Context, entityID string) ([]too
 	}
 
 	return decisions, nil
+}
+
+// GetFactsAboutTopic returns facts associated with a given topic.
+func (r *Reader) GetFactsAboutTopic(ctx context.Context, topicID string) ([]tools.Fact, error) {
+	script := fmt.Sprintf(
+		`?[id, content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at] :=
+    *mie_fact_topic { fact_id, topic_id },
+    topic_id = '%s',
+    *mie_fact { id: fact_id, content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at },
+    id = fact_id`, escapeDatalog(topicID),
+	)
+
+	qr, err := r.backend.Query(ctx, script)
+	if err != nil {
+		return nil, fmt.Errorf("get facts about topic: %w", err)
+	}
+
+	var facts []tools.Fact
+	for _, row := range qr.Rows {
+		node := r.parseNode("fact", row, qr.Headers)
+		if fact, ok := node.(*tools.Fact); ok {
+			facts = append(facts, *fact)
+		}
+	}
+
+	return facts, nil
+}
+
+// GetDecisionsAboutTopic returns decisions associated with a given topic.
+func (r *Reader) GetDecisionsAboutTopic(ctx context.Context, topicID string) ([]tools.Decision, error) {
+	script := fmt.Sprintf(
+		`?[id, title, rationale, alternatives, context, source_agent, source_conversation, status, created_at, updated_at] :=
+    *mie_decision_topic { decision_id, topic_id },
+    topic_id = '%s',
+    *mie_decision { id: decision_id, title, rationale, alternatives, context, source_agent, source_conversation, status, created_at, updated_at },
+    id = decision_id`, escapeDatalog(topicID),
+	)
+
+	qr, err := r.backend.Query(ctx, script)
+	if err != nil {
+		return nil, fmt.Errorf("get decisions about topic: %w", err)
+	}
+
+	var decisions []tools.Decision
+	for _, row := range qr.Rows {
+		node := r.parseNode("decision", row, qr.Headers)
+		if dec, ok := node.(*tools.Decision); ok {
+			decisions = append(decisions, *dec)
+		}
+	}
+
+	return decisions, nil
+}
+
+// GetEntitiesAboutTopic returns entities associated with a given topic.
+func (r *Reader) GetEntitiesAboutTopic(ctx context.Context, topicID string) ([]tools.Entity, error) {
+	script := fmt.Sprintf(
+		`?[id, name, kind, description, source_agent, created_at, updated_at] :=
+    *mie_entity_topic { entity_id, topic_id },
+    topic_id = '%s',
+    *mie_entity { id: entity_id, name, kind, description, source_agent, created_at, updated_at },
+    id = entity_id`, escapeDatalog(topicID),
+	)
+
+	qr, err := r.backend.Query(ctx, script)
+	if err != nil {
+		return nil, fmt.Errorf("get entities about topic: %w", err)
+	}
+
+	var entities []tools.Entity
+	for _, row := range qr.Rows {
+		node := r.parseNode("entity", row, qr.Headers)
+		if ent, ok := node.(*tools.Entity); ok {
+			entities = append(entities, *ent)
+		}
+	}
+
+	return entities, nil
 }
 
 // GetStats returns memory graph statistics.
