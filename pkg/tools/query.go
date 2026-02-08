@@ -27,13 +27,20 @@ func Query(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 		limit = 50
 	}
 
+	// Optional filters for search results.
+	filters := searchFilters{
+		Category:  GetStringArg(args, "category", ""),
+		Kind:      GetStringArg(args, "kind", ""),
+		ValidOnly: GetBoolArg(args, "valid_only", true),
+	}
+
 	var result *ToolResult
 	var err error
 	switch mode {
 	case "semantic":
-		result, err = querySemanticMode(ctx, client, query, nodeTypes, limit)
+		result, err = querySemanticMode(ctx, client, query, nodeTypes, limit, filters)
 	case "exact":
-		result, err = queryExactMode(ctx, client, query, nodeTypes, limit)
+		result, err = queryExactMode(ctx, client, query, nodeTypes, limit, filters)
 	case "graph":
 		result, err = queryGraphMode(ctx, client, args)
 	default:
@@ -48,7 +55,51 @@ func Query(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 	return result, err
 }
 
-func querySemanticMode(ctx context.Context, client Querier, query string, nodeTypes []string, limit int) (*ToolResult, error) {
+// searchFilters holds optional filters for search results.
+type searchFilters struct {
+	Category  string // Filter facts by category.
+	Kind      string // Filter entities by kind.
+	ValidOnly bool   // Only return valid facts.
+}
+
+// applySearchFilters filters search results by category, kind, and valid_only.
+func applySearchFilters(results []SearchResult, f searchFilters) []SearchResult {
+	if f.Category == "" && f.Kind == "" && f.ValidOnly {
+		// ValidOnly=true is the default; only filter if there's something specific.
+		// Check if any fact is invalid.
+		hasInvalid := false
+		for _, r := range results {
+			if fact, ok := r.Metadata.(*Fact); ok && !fact.Valid {
+				hasInvalid = true
+				break
+			}
+		}
+		if !hasInvalid {
+			return results
+		}
+	}
+
+	filtered := make([]SearchResult, 0, len(results))
+	for _, r := range results {
+		switch m := r.Metadata.(type) {
+		case *Fact:
+			if f.ValidOnly && !m.Valid {
+				continue
+			}
+			if f.Category != "" && m.Category != f.Category {
+				continue
+			}
+		case *Entity:
+			if f.Kind != "" && m.Kind != f.Kind {
+				continue
+			}
+		}
+		filtered = append(filtered, r)
+	}
+	return filtered
+}
+
+func querySemanticMode(ctx context.Context, client Querier, query string, nodeTypes []string, limit int, filters searchFilters) (*ToolResult, error) {
 	if !client.EmbeddingsEnabled() {
 		return NewError("Semantic search requires embeddings to be enabled. Enable in config or use mode=exact."), nil
 	}
@@ -57,6 +108,8 @@ func querySemanticMode(ctx context.Context, client Querier, query string, nodeTy
 	if err != nil {
 		return NewError(fmt.Sprintf("Semantic search failed: %v", err)), nil
 	}
+
+	results = applySearchFilters(results, filters)
 
 	if len(results) == 0 {
 		return NewResult(fmt.Sprintf("## Memory Search Results for: %q\n\n_No results found._\n", query)), nil
@@ -95,11 +148,13 @@ func querySemanticMode(ctx context.Context, client Querier, query string, nodeTy
 	return NewResult(sb.String()), nil
 }
 
-func queryExactMode(ctx context.Context, client Querier, query string, nodeTypes []string, limit int) (*ToolResult, error) {
+func queryExactMode(ctx context.Context, client Querier, query string, nodeTypes []string, limit int, filters searchFilters) (*ToolResult, error) {
 	results, err := client.ExactSearch(ctx, query, nodeTypes, limit)
 	if err != nil {
 		return NewError(fmt.Sprintf("Exact search failed: %v", err)), nil
 	}
+
+	results = applySearchFilters(results, filters)
 
 	if len(results) == 0 {
 		return NewResult(fmt.Sprintf("## Exact Search Results for: %q\n\n_No results found._\n", query)), nil

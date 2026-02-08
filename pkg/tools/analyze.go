@@ -22,8 +22,6 @@ func Analyze(ctx context.Context, client Querier, args map[string]any) (*ToolRes
 		return NewError("Missing required parameter: content"), nil
 	}
 
-	_ = GetStringArg(args, "content_type", "conversation")
-
 	var sb strings.Builder
 
 	// Search for related nodes across all types

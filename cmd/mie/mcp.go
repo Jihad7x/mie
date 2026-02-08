@@ -230,6 +230,7 @@ var toolHandlers = map[string]toolHandler{
 	"mie_store":      handleStore,
 	"mie_bulk_store": handleBulkStore,
 	"mie_query":      handleQuery,
+	"mie_get":        handleGet,
 	"mie_update":     handleUpdate,
 	"mie_list":       handleList,
 	"mie_conflicts":  handleConflicts,
@@ -516,13 +517,7 @@ func (s *mcpServer) getTools() []mcpTool {
 						"type":        "string",
 						"description": "Conversation fragment or information to analyze for potential memory storage",
 					},
-					"content_type": map[string]any{
-						"type":        "string",
-						"enum":        []string{"conversation", "statement", "decision", "event"},
-						"description": "Type of content being analyzed. Helps focus the search.",
-						"default":     "conversation",
 					},
-				},
 				"required": []string{"content"},
 			},
 		},
@@ -793,6 +788,20 @@ func (s *mcpServer) getTools() []mcpTool {
 			},
 		},
 		{
+			Name:        "mie_get",
+			Description: "Retrieve a single memory node by its ID. Returns full details including all fields. Use this to inspect a specific node after finding its ID via mie_query or mie_list.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"node_id": map[string]any{
+						"type":        "string",
+						"description": "The node ID to retrieve (e.g., fact:abc123, ent:def456, dec:ghi789)",
+					},
+				},
+				"required": []string{"node_id"},
+			},
+		},
+		{
 			Name:        "mie_update",
 			Description: "Update or invalidate existing memory nodes. For facts, invalidation creates a chain (old fact marked invalid, linked to new). For entities, update description. For decisions, change status.",
 			InputSchema: map[string]any{
@@ -957,6 +966,10 @@ func handleStore(ctx context.Context, s *mcpServer, args map[string]any) (*tools
 
 func handleQuery(ctx context.Context, s *mcpServer, args map[string]any) (*tools.ToolResult, error) {
 	return tools.Query(ctx, s.client, args)
+}
+
+func handleGet(ctx context.Context, s *mcpServer, args map[string]any) (*tools.ToolResult, error) {
+	return tools.Get(ctx, s.client, args)
 }
 
 func handleUpdate(ctx context.Context, s *mcpServer, args map[string]any) (*tools.ToolResult, error) {

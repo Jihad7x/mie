@@ -87,6 +87,39 @@ func TestQuery_ExactMode(t *testing.T) {
 	}
 }
 
+func TestQuery_ExactMode_FactsWithValidOnly(t *testing.T) {
+	// Regression test: facts must survive valid_only filtering.
+	// parseSearchResult sets Valid=true on Fact metadata, so the default
+	// valid_only=true filter must not drop valid facts.
+	mock := &MockQuerier{
+		ExactSearchFunc: func(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error) {
+			return []SearchResult{
+				{
+					NodeType: "fact", ID: "fact:abc", Content: "I love coffee",
+					Metadata: &Fact{ID: "fact:abc", Content: "I love coffee", Category: "preference", Valid: true},
+				},
+			}, nil
+		},
+	}
+
+	result, err := Query(context.Background(), mock, map[string]any{
+		"query": "coffee",
+		"mode":  "exact",
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Query() returned error: %s", result.Text)
+	}
+	if !strings.Contains(result.Text, "fact:abc") {
+		t.Error("Query() should include fact result; valid_only must not filter valid facts")
+	}
+	if strings.Contains(result.Text, "No results found") {
+		t.Error("Query() should find results, not show empty state")
+	}
+}
+
 func TestQuery_GraphMode(t *testing.T) {
 	mock := &MockQuerier{
 		GetRelatedEntitiesFunc: func(ctx context.Context, factID string) ([]Entity, error) {

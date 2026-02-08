@@ -920,6 +920,7 @@ func (r *Reader) parseSearchResult(nodeType string, row []any, headers []string)
 			ID:       sr.ID,
 			Content:  sr.Content,
 			Category: toString(row[2]),
+			Valid:    true, // Search queries already filter valid = true in Datalog
 		}
 	case "decision":
 		// id, title, rationale, status, distance
