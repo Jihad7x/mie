@@ -166,6 +166,14 @@ func (c *Client) AddRelationship(ctx context.Context, edgeType string, fields ma
 	return c.writer.AddRelationship(ctx, edgeType, fields)
 }
 
+func (c *Client) DeleteNode(ctx context.Context, nodeID string) error {
+	return c.writer.DeleteNode(ctx, nodeID)
+}
+
+func (c *Client) RemoveRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
+	return c.writer.RemoveRelationship(ctx, edgeType, fields)
+}
+
 // --- tools.Querier read operations ---
 
 func (c *Client) SemanticSearch(ctx context.Context, query string, nodeTypes []string, limit int) ([]tools.SearchResult, error) {

@@ -405,6 +405,134 @@ func (w *Writer) storeEmbeddingAsync(table, idCol, nodeID, text string) {
 	}
 }
 
+// DeleteNode removes a node and all its associated edges and embeddings.
+func (w *Writer) DeleteNode(ctx context.Context, nodeID string) error {
+	nodeType, err := w.detectNodeType(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+
+	table := nodeTypeToTable(nodeType)
+	escaped := escapeDatalog(nodeID)
+
+	// Delete the node itself.
+	mutation := fmt.Sprintf(`?[id] <- [['%s']] :rm %s { id }`, escaped, table)
+	if err := w.backend.Execute(ctx, mutation); err != nil {
+		return fmt.Errorf("delete node %s: %w", nodeID, err)
+	}
+
+	// Delete embedding if applicable.
+	embTable, embCol := embeddingTableForType(nodeType)
+	if embTable != "" {
+		embMut := fmt.Sprintf(`?[%s] <- [['%s']] :rm %s { %s }`, embCol, escaped, embTable, embCol)
+		// Ignore error — embedding may not exist.
+		_ = w.backend.Execute(ctx, embMut)
+	}
+
+	// Cascade-delete all edges referencing this node.
+	w.cascadeDeleteEdges(ctx, nodeType, nodeID)
+
+	return nil
+}
+
+// RemoveRelationship deletes a specific edge between two nodes.
+func (w *Writer) RemoveRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
+	cols, ok := ValidEdgeTables[edgeType]
+	if !ok {
+		return fmt.Errorf("unknown edge type: %s", edgeType)
+	}
+
+	var colNames []string
+	var colValues []string
+	for _, col := range cols {
+		val, exists := fields[col]
+		if !exists {
+			return fmt.Errorf("missing required field %q for edge type %s", col, edgeType)
+		}
+		colNames = append(colNames, col)
+		colValues = append(colValues, fmt.Sprintf(`'%s'`, escapeDatalog(val)))
+	}
+
+	mutation := fmt.Sprintf(`?[%s] <- [[%s]] :rm %s { %s }`,
+		joinStrings(colNames, ", "),
+		joinStrings(colValues, ", "),
+		edgeType,
+		joinStrings(colNames, ", "),
+	)
+
+	if err := w.backend.Execute(ctx, mutation); err != nil {
+		return fmt.Errorf("remove relationship %s: %w", edgeType, err)
+	}
+	return nil
+}
+
+// embeddingTableForType returns the embedding table and ID column for a node type.
+func embeddingTableForType(nodeType string) (table, col string) {
+	switch nodeType {
+	case "fact":
+		return "mie_fact_embedding", "fact_id"
+	case "decision":
+		return "mie_decision_embedding", "decision_id"
+	case "entity":
+		return "mie_entity_embedding", "entity_id"
+	case "event":
+		return "mie_event_embedding", "event_id"
+	default:
+		return "", ""
+	}
+}
+
+// cascadeDeleteEdges removes all edges that reference the given node.
+func (w *Writer) cascadeDeleteEdges(ctx context.Context, nodeType, nodeID string) {
+	escaped := escapeDatalog(nodeID)
+
+	// Map of edge table → column that might reference this node type.
+	var edgesToClean []struct{ table, col string }
+
+	switch nodeType {
+	case "fact":
+		edgesToClean = []struct{ table, col string }{
+			{"mie_fact_entity", "fact_id"},
+			{"mie_fact_topic", "fact_id"},
+			{"mie_invalidates", "new_fact_id"},
+			{"mie_invalidates", "old_fact_id"},
+		}
+	case "entity":
+		edgesToClean = []struct{ table, col string }{
+			{"mie_fact_entity", "entity_id"},
+			{"mie_decision_entity", "entity_id"},
+			{"mie_entity_topic", "entity_id"},
+		}
+	case "decision":
+		edgesToClean = []struct{ table, col string }{
+			{"mie_decision_topic", "decision_id"},
+			{"mie_decision_entity", "decision_id"},
+			{"mie_event_decision", "decision_id"},
+		}
+	case "event":
+		edgesToClean = []struct{ table, col string }{
+			{"mie_event_decision", "event_id"},
+		}
+	case "topic":
+		edgesToClean = []struct{ table, col string }{
+			{"mie_fact_topic", "topic_id"},
+			{"mie_decision_topic", "topic_id"},
+			{"mie_entity_topic", "topic_id"},
+		}
+	}
+
+	for _, edge := range edgesToClean {
+		cols := ValidEdgeTables[edge.table]
+		if len(cols) < 2 {
+			continue
+		}
+		colList := joinStrings(cols, ", ")
+		script := fmt.Sprintf(`?[%s] := *%s { %s }, %s = '%s' :rm %s { %s }`,
+			colList, edge.table, colList, edge.col, escaped, edge.table, colList)
+		_ = w.backend.Execute(ctx, script)
+	}
+}
+
 // detectNodeType determines the type of a node by its ID prefix or by querying tables.
 func (w *Writer) detectNodeType(ctx context.Context, nodeID string) (string, error) {
 	// Try to detect from ID prefix first

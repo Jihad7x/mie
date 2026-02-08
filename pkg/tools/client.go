@@ -18,6 +18,8 @@ type Querier interface {
 	StoreTopic(ctx context.Context, req StoreTopicRequest) (*Topic, error)
 	InvalidateFact(ctx context.Context, oldFactID, newFactID, reason string) error
 	AddRelationship(ctx context.Context, edgeType string, fields map[string]string) error
+	DeleteNode(ctx context.Context, nodeID string) error
+	RemoveRelationship(ctx context.Context, edgeType string, fields map[string]string) error
 
 	// Read operations
 	SemanticSearch(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error)

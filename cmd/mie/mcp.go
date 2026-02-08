@@ -236,6 +236,7 @@ var toolHandlers = map[string]toolHandler{
 	"mie_conflicts":  handleConflicts,
 	"mie_export":     handleExport,
 	"mie_status":     handleMIEStatus,
+	"mie_delete":     handleDelete,
 }
 
 // runMCPServer starts the MIE MCP server on stdin/stdout.
@@ -942,6 +943,58 @@ func (s *mcpServer) getTools() []mcpTool {
 			},
 		},
 		{
+			Name:        "mie_delete",
+			Description: "Delete a memory node or remove a relationship. Deleting a node also removes its embedding and all associated edges (cascade). Use with care — deletions are permanent.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"action": map[string]any{
+						"type":        "string",
+						"enum":        []string{"delete_node", "remove_relationship"},
+						"description": "Action to perform",
+					},
+					"node_id": map[string]any{
+						"type":        "string",
+						"description": "Node ID to delete (required for delete_node)",
+					},
+					"edge_type": map[string]any{
+						"type":        "string",
+						"enum":        []string{"mie_fact_entity", "mie_fact_topic", "mie_decision_topic", "mie_decision_entity", "mie_event_decision", "mie_entity_topic", "mie_invalidates"},
+						"description": "Edge table name (required for remove_relationship)",
+					},
+					"fact_id": map[string]any{
+						"type":        "string",
+						"description": "Fact ID (edge field)",
+					},
+					"entity_id": map[string]any{
+						"type":        "string",
+						"description": "Entity ID (edge field)",
+					},
+					"topic_id": map[string]any{
+						"type":        "string",
+						"description": "Topic ID (edge field)",
+					},
+					"decision_id": map[string]any{
+						"type":        "string",
+						"description": "Decision ID (edge field)",
+					},
+					"event_id": map[string]any{
+						"type":        "string",
+						"description": "Event ID (edge field)",
+					},
+					"old_fact_id": map[string]any{
+						"type":        "string",
+						"description": "Old fact ID for invalidation edges",
+					},
+					"new_fact_id": map[string]any{
+						"type":        "string",
+						"description": "New fact ID for invalidation edges",
+					},
+				},
+				"required": []string{"action"},
+			},
+		},
+		{
 			Name:        "mie_status",
 			Description: "Display memory graph health and statistics. Shows counts of all node types, configuration details, and health checks.",
 			InputSchema: map[string]any{
@@ -990,6 +1043,10 @@ func handleExport(ctx context.Context, s *mcpServer, args map[string]any) (*tool
 
 func handleBulkStore(ctx context.Context, s *mcpServer, args map[string]any) (*tools.ToolResult, error) {
 	return tools.BulkStore(ctx, s.client, args)
+}
+
+func handleDelete(ctx context.Context, s *mcpServer, args map[string]any) (*tools.ToolResult, error) {
+	return tools.Delete(ctx, s.client, args)
 }
 
 func handleMIEStatus(ctx context.Context, s *mcpServer, args map[string]any) (*tools.ToolResult, error) {

@@ -169,7 +169,7 @@ func TestMCPToolsList(t *testing.T) {
 
 	toolsList, ok := result["tools"].([]any)
 	require.True(t, ok)
-	assert.Len(t, toolsList, 10)
+	assert.Len(t, toolsList, 11)
 
 	expectedNames := map[string]bool{
 		"mie_analyze":    false,
@@ -178,6 +178,7 @@ func TestMCPToolsList(t *testing.T) {
 		"mie_query":      false,
 		"mie_get":        false,
 		"mie_update":     false,
+		"mie_delete":     false,
 		"mie_list":       false,
 		"mie_conflicts":  false,
 		"mie_export":     false,

@@ -15,6 +15,8 @@ type MockQuerier struct {
 	StoreTopicFunc           func(ctx context.Context, req StoreTopicRequest) (*Topic, error)
 	InvalidateFactFunc       func(ctx context.Context, oldFactID, newFactID, reason string) error
 	AddRelationshipFunc      func(ctx context.Context, edgeType string, fields map[string]string) error
+	DeleteNodeFunc           func(ctx context.Context, nodeID string) error
+	RemoveRelationshipFunc   func(ctx context.Context, edgeType string, fields map[string]string) error
 	SemanticSearchFunc       func(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error)
 	ExactSearchFunc          func(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error)
 	GetNodeByIDFunc          func(ctx context.Context, nodeID string) (any, error)
@@ -80,6 +82,20 @@ func (m *MockQuerier) InvalidateFact(ctx context.Context, oldFactID, newFactID, 
 func (m *MockQuerier) AddRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
 	if m.AddRelationshipFunc != nil {
 		return m.AddRelationshipFunc(ctx, edgeType, fields)
+	}
+	return nil
+}
+
+func (m *MockQuerier) DeleteNode(ctx context.Context, nodeID string) error {
+	if m.DeleteNodeFunc != nil {
+		return m.DeleteNodeFunc(ctx, nodeID)
+	}
+	return nil
+}
+
+func (m *MockQuerier) RemoveRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
+	if m.RemoveRelationshipFunc != nil {
+		return m.RemoveRelationshipFunc(ctx, edgeType, fields)
 	}
 	return nil
 }
