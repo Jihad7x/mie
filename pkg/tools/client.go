@@ -34,6 +34,9 @@ type Querier interface {
 	GetInvalidationChain(ctx context.Context, factID string) ([]Invalidation, error)
 	GetRelatedFacts(ctx context.Context, entityID string) ([]Fact, error)
 	GetEntityDecisions(ctx context.Context, entityID string) ([]Decision, error)
+	GetFactsAboutTopic(ctx context.Context, topicID string) ([]Fact, error)
+	GetDecisionsAboutTopic(ctx context.Context, topicID string) ([]Decision, error)
+	GetEntitiesAboutTopic(ctx context.Context, topicID string) ([]Entity, error)
 
 	// Update operations
 	UpdateDescription(ctx context.Context, nodeID, newDescription string) error

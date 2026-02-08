@@ -789,7 +789,7 @@ func (s *mcpServer) getTools() []mcpTool {
 					},
 					"traversal": map[string]any{
 						"type":        "string",
-						"enum":        []string{"related_entities", "related_facts", "invalidation_chain", "decision_entities", "facts_about_entity", "entity_decisions"},
+						"enum":        []string{"related_entities", "related_facts", "invalidation_chain", "decision_entities", "facts_about_entity", "entity_decisions", "facts_about_topic", "decisions_about_topic", "entities_about_topic"},
 						"description": "Traversal type for graph mode",
 					},
 				},

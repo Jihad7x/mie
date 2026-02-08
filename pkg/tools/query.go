@@ -14,7 +14,7 @@ import (
 func Query(ctx context.Context, client Querier, args map[string]any) (*ToolResult, error) {
 	query := GetStringArg(args, "query", "")
 	if query == "" {
-		return NewError("Missing required parameter: query"), nil
+		return NewError("Query must not be empty"), nil
 	}
 
 	mode := GetStringArg(args, "mode", "semantic")
@@ -240,8 +240,14 @@ func queryGraphMode(ctx context.Context, client Querier, args map[string]any) (*
 		err = traverseDecisionEntities(ctx, client, &sb, nodeID)
 	case "entity_decisions":
 		err = traverseEntityDecisions(ctx, client, &sb, nodeID)
+	case "facts_about_topic":
+		err = traverseFactsAboutTopic(ctx, client, &sb, nodeID)
+	case "decisions_about_topic":
+		err = traverseDecisionsAboutTopic(ctx, client, &sb, nodeID)
+	case "entities_about_topic":
+		err = traverseEntitiesAboutTopic(ctx, client, &sb, nodeID)
 	default:
-		return NewError(fmt.Sprintf("Invalid traversal type %q. Must be one of: related_entities, related_facts, invalidation_chain, decision_entities, facts_about_entity, entity_decisions", traversal)), nil
+		return NewError(fmt.Sprintf("Invalid traversal type %q. Must be one of: related_entities, related_facts, invalidation_chain, decision_entities, facts_about_entity, entity_decisions, facts_about_topic, decisions_about_topic, entities_about_topic", traversal)), nil
 	}
 
 	if err != nil {
@@ -339,6 +345,60 @@ func traverseEntityDecisions(ctx context.Context, client Querier, sb *strings.Bu
 	for i, d := range decisions {
 		fmt.Fprintf(sb, "%d. [%s] %q (status: %s)\n",
 			i+1, d.ID, Truncate(d.Title, 100), d.Status)
+	}
+	return nil
+}
+
+func traverseFactsAboutTopic(ctx context.Context, client Querier, sb *strings.Builder, nodeID string) error {
+	facts, err := client.GetFactsAboutTopic(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+	if len(facts) == 0 {
+		sb.WriteString("_No related facts found._\n")
+		return nil
+	}
+	for i, f := range facts {
+		validStr := "valid"
+		if !f.Valid {
+			validStr = "invalidated"
+		}
+		fmt.Fprintf(sb, "%d. [%s] %q (category: %s, confidence: %.1f, %s)\n",
+			i+1, f.ID, Truncate(f.Content, 100), f.Category, f.Confidence, validStr)
+	}
+	return nil
+}
+
+func traverseDecisionsAboutTopic(ctx context.Context, client Querier, sb *strings.Builder, nodeID string) error {
+	decisions, err := client.GetDecisionsAboutTopic(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+	if len(decisions) == 0 {
+		sb.WriteString("_No related decisions found for this topic._\n")
+		return nil
+	}
+	for i, d := range decisions {
+		fmt.Fprintf(sb, "%d. [%s] %q (status: %s)\n",
+			i+1, d.ID, Truncate(d.Title, 100), d.Status)
+	}
+	return nil
+}
+
+func traverseEntitiesAboutTopic(ctx context.Context, client Querier, sb *strings.Builder, nodeID string) error {
+	entities, err := client.GetEntitiesAboutTopic(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+	if len(entities) == 0 {
+		sb.WriteString("_No related entities found for this topic._\n")
+		return nil
+	}
+	for i, e := range entities {
+		fmt.Fprintf(sb, "%d. [%s] %q (kind: %s)\n", i+1, e.ID, e.Name, e.Kind)
+		if e.Description != "" {
+			fmt.Fprintf(sb, "   %s\n", Truncate(e.Description, 100))
+		}
 	}
 	return nil
 }

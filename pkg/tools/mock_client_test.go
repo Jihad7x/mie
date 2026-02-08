@@ -26,8 +26,11 @@ type MockQuerier struct {
 	GetDecisionEntitiesFunc  func(ctx context.Context, decisionID string) ([]EntityWithRole, error)
 	GetInvalidationChainFunc func(ctx context.Context, factID string) ([]Invalidation, error)
 	GetRelatedFactsFunc      func(ctx context.Context, entityID string) ([]Fact, error)
-	GetEntityDecisionsFunc   func(ctx context.Context, entityID string) ([]Decision, error)
-	UpdateDescriptionFunc    func(ctx context.Context, nodeID, newDescription string) error
+	GetEntityDecisionsFunc         func(ctx context.Context, entityID string) ([]Decision, error)
+	GetFactsAboutTopicFunc         func(ctx context.Context, topicID string) ([]Fact, error)
+	GetDecisionsAboutTopicFunc     func(ctx context.Context, topicID string) ([]Decision, error)
+	GetEntitiesAboutTopicFunc      func(ctx context.Context, topicID string) ([]Entity, error)
+	UpdateDescriptionFunc          func(ctx context.Context, nodeID, newDescription string) error
 	UpdateStatusFunc         func(ctx context.Context, nodeID, newStatus string) error
 	DetectConflictsFunc      func(ctx context.Context, opts ConflictOptions) ([]Conflict, error)
 	CheckNewFactConflictsFunc func(ctx context.Context, content, category string) ([]Conflict, error)
@@ -168,6 +171,27 @@ func (m *MockQuerier) GetEntityDecisions(ctx context.Context, entityID string) (
 		return m.GetEntityDecisionsFunc(ctx, entityID)
 	}
 	return []Decision{}, nil
+}
+
+func (m *MockQuerier) GetFactsAboutTopic(ctx context.Context, topicID string) ([]Fact, error) {
+	if m.GetFactsAboutTopicFunc != nil {
+		return m.GetFactsAboutTopicFunc(ctx, topicID)
+	}
+	return []Fact{}, nil
+}
+
+func (m *MockQuerier) GetDecisionsAboutTopic(ctx context.Context, topicID string) ([]Decision, error) {
+	if m.GetDecisionsAboutTopicFunc != nil {
+		return m.GetDecisionsAboutTopicFunc(ctx, topicID)
+	}
+	return []Decision{}, nil
+}
+
+func (m *MockQuerier) GetEntitiesAboutTopic(ctx context.Context, topicID string) ([]Entity, error) {
+	if m.GetEntitiesAboutTopicFunc != nil {
+		return m.GetEntitiesAboutTopicFunc(ctx, topicID)
+	}
+	return []Entity{}, nil
 }
 
 func (m *MockQuerier) UpdateDescription(ctx context.Context, nodeID, newDescription string) error {

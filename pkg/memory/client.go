@@ -218,6 +218,18 @@ func (c *Client) GetEntityDecisions(ctx context.Context, entityID string) ([]too
 	return c.reader.GetEntityDecisions(ctx, entityID)
 }
 
+func (c *Client) GetFactsAboutTopic(ctx context.Context, topicID string) ([]tools.Fact, error) {
+	return c.reader.GetFactsAboutTopic(ctx, topicID)
+}
+
+func (c *Client) GetDecisionsAboutTopic(ctx context.Context, topicID string) ([]tools.Decision, error) {
+	return c.reader.GetDecisionsAboutTopic(ctx, topicID)
+}
+
+func (c *Client) GetEntitiesAboutTopic(ctx context.Context, topicID string) ([]tools.Entity, error) {
+	return c.reader.GetEntitiesAboutTopic(ctx, topicID)
+}
+
 // --- tools.Querier update operations ---
 
 func (c *Client) UpdateDescription(ctx context.Context, nodeID, newDescription string) error {
