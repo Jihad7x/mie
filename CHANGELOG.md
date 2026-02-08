@@ -5,6 +5,17 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-02-08
+
+### Fixed
+
+- Conflict detection threshold mismatch: similarity value (0.85) was incorrectly used as cosine distance, causing massive false positives
+- Category filter ignored in HNSW neighbor search during conflict detection
+- CozoDB injection via unvalidated `sort_by` parameter in `mie_list` (added allowlist validation)
+- `confidence=0` rejected as invalid in `mie_store` — zero is a valid confidence value
+- `mie_export` omitting all relationship edges from output
+- Replaced O(n²) bubble sort with `sort.Slice` in conflict detection
+
 ## [0.1.2] - 2026-02-06
 
 ### Added
@@ -37,5 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[0.1.3]: https://github.com/kraklabs/mie/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/kraklabs/mie/compare/v0.1.0...v0.1.2
 [0.1.0]: https://github.com/kraklabs/mie/releases/tag/v0.1.0
