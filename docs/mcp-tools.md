@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-MIE exposes 10 tools through the [Model Context Protocol](https://modelcontextprotocol.io/). AI agents call these tools to read, write, and search the memory graph.
+MIE exposes 11 tools through the [Model Context Protocol](https://modelcontextprotocol.io/). AI agents call these tools to read, write, and search the memory graph.
 
 All tools are invoked via `tools/call` JSON-RPC requests. Each tool returns a text response in `content[0].text`.
 
@@ -200,6 +200,8 @@ Search the memory graph. Supports three modes: semantic (natural language simila
 | `category` | string | No | -- | Filter facts by category. |
 | `kind` | string | No | -- | Filter entities by kind. |
 | `valid_only` | boolean | No | `true` | Only return valid (non-invalidated) facts. |
+| `created_after` | number | No | -- | Only include nodes created at or after this unix timestamp. |
+| `created_before` | number | No | -- | Only include nodes created at or before this unix timestamp. |
 | `node_id` | string | Conditional | -- | Node ID for graph traversal. **Required for `mode=graph`.** |
 | `traversal` | string | Conditional | -- | Traversal type. **Required for `mode=graph`.** |
 
@@ -338,6 +340,8 @@ List memory nodes with filtering, pagination, and sorting. Returns a formatted t
 | `status` | string | No | -- | Filter decisions by status: `active`, `superseded`, `reversed`. |
 | `topic` | string | No | -- | Filter by topic name. |
 | `valid_only` | boolean | No | `true` | Only return valid (non-invalidated) facts. |
+| `created_after` | number | No | -- | Only include nodes created at or after this unix timestamp. |
+| `created_before` | number | No | -- | Only include nodes created at or before this unix timestamp. |
 | `limit` | number | No | `20` | Results per page (1-100). |
 | `offset` | number | No | `0` | Skip this many results (for pagination). |
 | `sort_by` | string | No | `"created_at"` | Sort field: `created_at`, `updated_at`, `name`. |
@@ -593,6 +597,61 @@ Export the complete memory graph for backup or migration.
 ```
 
 **Note:** Output is truncated at 100,000 characters. For large graphs, use the CLI `mie export` command to write directly to a file.
+
+---
+
+## mie_delete
+
+Delete a memory node or remove a relationship. Deleting a node also removes its embedding and all associated edges (cascade). Use with care — deletions are permanent.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `action` | string | Yes | -- | Action: `delete_node` or `remove_relationship`. |
+| `node_id` | string | Conditional | -- | Node ID to delete. **Required for `delete_node`.** |
+| `edge_type` | string | Conditional | -- | Edge table name. **Required for `remove_relationship`.** One of: `mie_fact_entity`, `mie_fact_topic`, `mie_decision_topic`, `mie_decision_entity`, `mie_event_decision`, `mie_entity_topic`, `mie_invalidates`. |
+| `fact_id` | string | No | -- | Fact ID (edge field for relationship removal). |
+| `entity_id` | string | No | -- | Entity ID (edge field). |
+| `topic_id` | string | No | -- | Topic ID (edge field). |
+| `decision_id` | string | No | -- | Decision ID (edge field). |
+| `event_id` | string | No | -- | Event ID (edge field). |
+
+### Example: Delete a node
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 14,
+  "method": "tools/call",
+  "params": {
+    "name": "mie_delete",
+    "arguments": {
+      "action": "delete_node",
+      "node_id": "fact:abc123"
+    }
+  }
+}
+```
+
+### Example: Remove a relationship
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 15,
+  "method": "tools/call",
+  "params": {
+    "name": "mie_delete",
+    "arguments": {
+      "action": "remove_relationship",
+      "edge_type": "mie_fact_entity",
+      "fact_id": "fact:abc123",
+      "entity_id": "ent:def456"
+    }
+  }
+}
+```
 
 ---
 

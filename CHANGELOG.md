@@ -5,6 +5,14 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-02-08
+
+### Added
+
+- `mie_delete` tool with cascade delete (node + embedding + all associated edges) and relationship removal
+- `created_after` and `created_before` time-range filters on `mie_list` and `mie_query`
+- Human-readable UTC timestamps in `mie_get` and `mie_list` output (replaces raw unix timestamps)
+
 ## [0.1.5] - 2026-02-08
 
 ### Added
@@ -71,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[0.1.6]: https://github.com/kraklabs/mie/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/kraklabs/mie/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/kraklabs/mie/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/kraklabs/mie/compare/v0.1.2...v0.1.3
