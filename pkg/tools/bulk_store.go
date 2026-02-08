@@ -33,7 +33,24 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 		return NewError(fmt.Sprintf("Too many items: %d (max %d)", len(itemSlice), maxBulkItems)), nil
 	}
 
-	// Phase 1: Store all nodes and collect their IDs.
+	stored, typeCounts, errors := bulkStoreNodes(ctx, client, itemSlice)
+	relMessages, relErrors := bulkProcessRelationships(ctx, client, itemSlice, stored)
+	errors = append(errors, relErrors...)
+
+	// Increment usage counters (never fail the main operation).
+	totalStored := 0
+	for _, c := range typeCounts {
+		totalStored += c
+	}
+	for range totalStored {
+		_ = client.IncrementCounter(ctx, "total_stores")
+	}
+
+	return NewResult(bulkFormatOutput(stored, typeCounts, totalStored, relMessages, errors)), nil
+}
+
+// bulkStoreNodes stores all items and returns their results, type counts, and any errors.
+func bulkStoreNodes(ctx context.Context, client Querier, itemSlice []any) ([]bulkItem, map[string]int, []string) {
 	stored := make([]bulkItem, len(itemSlice))
 	var errors []string
 	typeCounts := map[string]int{}
@@ -64,15 +81,20 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 		typeCounts[nodeType]++
 	}
 
-	// Phase 2: Handle invalidations and relationships for successfully stored items.
+	return stored, typeCounts, errors
+}
+
+// bulkProcessRelationships handles invalidations and relationships for stored items.
+func bulkProcessRelationships(ctx context.Context, client Querier, itemSlice []any, stored []bulkItem) ([]string, []string) {
 	var relMessages []string
+	var errors []string
+
 	for i, item := range stored {
 		if item.nodeID == "" {
 			continue
 		}
 		itemArgs, _ := itemSlice[i].(map[string]any)
 
-		// Handle invalidation.
 		toolErr, invalidationMsg := handleInvalidation(ctx, client, itemArgs, item.nodeID)
 		if toolErr != nil {
 			errors = append(errors, fmt.Sprintf("item[%d] invalidation: %s", i, toolErr.Text))
@@ -80,7 +102,6 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 			relMessages = append(relMessages, fmt.Sprintf("item[%d]%s", i, invalidationMsg))
 		}
 
-		// Handle relationships, resolving cross-batch references.
 		if rels, ok := itemArgs["relationships"]; ok && rels != nil {
 			resolved := resolveBatchRefs(rels, stored)
 			if msg := storeRelationships(ctx, client, item.nodeID, resolved); msg != "" {
@@ -89,28 +110,21 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 		}
 	}
 
-	// Phase 3: Build output.
+	return relMessages, errors
+}
+
+// bulkFormatOutput builds the formatted output string for a bulk store operation.
+func bulkFormatOutput(stored []bulkItem, typeCounts map[string]int, totalStored int, relMessages, errors []string) string {
 	var sb strings.Builder
 
-	// Summary line.
 	var parts []string
 	for _, nt := range []string{"fact", "decision", "entity", "event", "topic"} {
 		if c := typeCounts[nt]; c > 0 {
 			parts = append(parts, fmt.Sprintf("%d %ss", c, nt))
 		}
 	}
-	totalStored := 0
-	for _, c := range typeCounts {
-		totalStored += c
-	}
 	sb.WriteString(fmt.Sprintf("Stored %d items: %s\n", totalStored, strings.Join(parts, ", ")))
 
-	// Increment usage counters (never fail the main operation).
-	for range totalStored {
-		_ = client.IncrementCounter(ctx, "total_stores")
-	}
-
-	// Per-item IDs.
 	sb.WriteString("\nIDs:\n")
 	for i, item := range stored {
 		if item.nodeID != "" {
@@ -118,7 +132,6 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 		}
 	}
 
-	// Relationships.
 	if len(relMessages) > 0 {
 		sb.WriteString("\nRelationships:\n")
 		for _, msg := range relMessages {
@@ -126,7 +139,6 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 		}
 	}
 
-	// Errors.
 	if len(errors) > 0 {
 		sb.WriteString(fmt.Sprintf("\nErrors (%d):\n", len(errors)))
 		for _, e := range errors {
@@ -134,7 +146,7 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 		}
 	}
 
-	return NewResult(sb.String()), nil
+	return sb.String()
 }
 
 // resolveBatchRefs replaces target_ref index references in relationships with actual IDs
