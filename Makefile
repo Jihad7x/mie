@@ -83,7 +83,7 @@ test-coverage: test ## View coverage in browser
 
 lint: ## Run golangci-lint
 	@echo "Running linter..."
-	golangci-lint run ./...
+	CGO_ENABLED=1 CGO_LDFLAGS="$(CGO_LDFLAGS)" golangci-lint run --build-tags cozodb ./...
 
 fmt: ## Format code
 	@echo "Formatting code..."
