@@ -39,7 +39,7 @@ func (w *Writer) StoreFact(ctx context.Context, req tools.StoreFactRequest) (*to
 	if !isValidCategory(req.Category) {
 		req.Category = "general"
 	}
-	if req.Confidence <= 0 || req.Confidence > 1.0 {
+	if req.Confidence < 0 || req.Confidence > 1.0 {
 		req.Confidence = 0.8
 	}
 

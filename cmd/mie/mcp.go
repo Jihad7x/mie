@@ -551,8 +551,7 @@ func (s *mcpServer) getTools() []mcpTool {
 						"type":        "number",
 						"minimum":     0,
 						"maximum":     1,
-						"description": "Confidence level (0.0-1.0)",
-						"default":     0.8,
+						"description": "Confidence level (0.0-1.0). Defaults to 0.8 if not provided.",
 					},
 					"title": map[string]any{
 						"type":        "string",
@@ -657,8 +656,7 @@ func (s *mcpServer) getTools() []mcpTool {
 									"type":        "number",
 									"minimum":     0,
 									"maximum":     1,
-									"description": "Confidence level (0.0-1.0)",
-									"default":     0.8,
+									"description": "Confidence level (0.0-1.0). Defaults to 0.8 if not provided.",
 								},
 								"title": map[string]any{
 									"type":        "string",

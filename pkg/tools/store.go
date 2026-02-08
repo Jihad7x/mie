@@ -79,7 +79,7 @@ func storeNode(ctx context.Context, client Querier, args map[string]any, nodeTyp
 		if err != nil {
 			return "", "", err
 		}
-		return result.ID, fmt.Sprintf("Content: %q\nCategory: %s | Confidence: %.1f | Source: %s",
+		return result.ID, fmt.Sprintf("Content: %q\nCategory: %s | Confidence: %g | Source: %s",
 			Truncate(result.Content, 100), result.Category, result.Confidence, result.SourceAgent), nil
 
 	case "decision":
