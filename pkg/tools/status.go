@@ -56,9 +56,9 @@ func Status(ctx context.Context, client Querier, args map[string]any) (*ToolResu
 		sb += "- Database accessible (empty graph)\n"
 	}
 	if client.EmbeddingsEnabled() {
-		sb += "- Embeddings enabled\n"
+		sb += "- Embeddings enabled (provider active)\n"
 	} else {
-		sb += "- Embeddings disabled (semantic search unavailable)\n"
+		sb += "- Embeddings enabled (provider not configured)\n"
 	}
 
 	// Usage metrics
