@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "0.1.4"
+	mcpVersion    = "0.1.5" // mie_get tool, query filters, ExactSearch fix
 	mcpServerName = "mie"
 )
 

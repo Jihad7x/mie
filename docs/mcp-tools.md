@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-MIE exposes 8 tools through the [Model Context Protocol](https://modelcontextprotocol.io/). AI agents call these tools to read, write, and search the memory graph.
+MIE exposes 10 tools through the [Model Context Protocol](https://modelcontextprotocol.io/). AI agents call these tools to read, write, and search the memory graph.
 
 All tools are invoked via `tools/call` JSON-RPC requests. Each tool returns a text response in `content[0].text`.
 
@@ -17,7 +17,6 @@ Analyze a conversation fragment for potential memory storage. Returns related ex
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `content` | string | Yes | -- | Conversation fragment or information to analyze. |
-| `content_type` | string | No | `"conversation"` | Type of content. One of: `conversation`, `statement`, `decision`, `event`. |
 
 ### Example request
 
@@ -29,8 +28,7 @@ Analyze a conversation fragment for potential memory storage. Returns related ex
   "params": {
     "name": "mie_analyze",
     "arguments": {
-      "content": "The user prefers TypeScript over JavaScript for new projects and uses Bun as their runtime.",
-      "content_type": "statement"
+      "content": "The user prefers TypeScript over JavaScript for new projects and uses Bun as their runtime."
     }
   }
 }
@@ -287,6 +285,42 @@ Search the memory graph. Supports three modes: semantic (natural language simila
   }
 }
 ```
+
+---
+
+## mie_get
+
+Retrieve a single memory node by its ID. Returns full details including all fields.
+
+**When to use:** After finding a node ID via `mie_query` or `mie_list`, use this to inspect the complete node.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `node_id` | string | Yes | -- | The node ID to retrieve (e.g., `fact:abc123`, `ent:def456`, `dec:ghi789`). |
+
+### Example request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "mie_get",
+    "arguments": {
+      "node_id": "fact:a1b2c3d4"
+    }
+  }
+}
+```
+
+### Behavior
+
+1. Detects the node type from the ID prefix (`fact:`, `ent:`, `dec:`, `evt:`, `topic:`).
+2. Queries the corresponding table for full node details.
+3. Returns all fields for the node type in a formatted markdown block.
 
 ---
 

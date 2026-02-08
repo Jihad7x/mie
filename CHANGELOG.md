@@ -5,6 +5,21 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-02-08
+
+### Added
+
+- `mie_get` tool for retrieving a single memory node by its ID with full details
+- `category`, `kind`, and `valid_only` post-search filters wired into `mie_query` for both semantic and exact modes
+
+### Fixed
+
+- ExactSearch returning 0 facts: `parseSearchResult` did not set `Valid=true` on Fact metadata, causing the `valid_only` filter to drop all results
+
+### Removed
+
+- Dead `content_type` parameter from `mie_analyze` (was accepted but never used)
+
 ## [0.1.4] - 2026-02-08
 
 ### Fixed
@@ -56,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[0.1.5]: https://github.com/kraklabs/mie/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/kraklabs/mie/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/kraklabs/mie/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/kraklabs/mie/compare/v0.1.0...v0.1.2
