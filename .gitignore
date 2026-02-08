@@ -24,3 +24,8 @@ vendor/
 # Local Claude/MCP config
 .claude/
 .mcp.json
+
+# CIE configuration
+.cie/
+
+CLAUDE.md
