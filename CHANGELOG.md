@@ -5,6 +5,33 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-02-08
+
+### Fixed
+
+- Search queries now return `created_at` column, enabling date filters (`created_after`/`created_before`) to work correctly
+- ExactSearch no longer hardcodes `valid = true` in Datalog, allowing `valid_only=false` to return invalidated facts
+- `parseSearchResult` now populates Confidence, Status, EventDate, and CreatedAt in metadata for all node types
+- Invalid fact category now returns an error instead of silently falling back to "general"
+- Out-of-range confidence now returns an error instead of silently resetting to 0.8
+- Edge target nodes are validated before creating relationships; dangling edges are skipped with a warning
+- `target_ref` out-of-bounds errors in `mie_bulk_store` now report the item index and batch size
+- Datalog export uses single-quoted CozoDB literals with proper escaping instead of Go `%q` double-quoting
+- Status health section now shows "Embeddings: active" / "not configured" instead of the misleading "Embeddings enabled (provider not configured)"
+- Export edge filtering: only edges whose both endpoint types are in the requested `node_types` are exported
+- `mie_decision_entity` edge table now accepts the `role` field
+
+### Added
+
+- Topic filter support for `mie_list`: filter nodes by topic name via the `topic` parameter
+- "Valid" column in fact list table output showing "yes"/"no"
+- Correct pluralization in `mie_bulk_store` output: "1 entity" instead of "1 entitys"
+- Comprehensive E2E test suite: 19 Go tests + bash script with 127 MCP integration assertions
+
+### Changed
+
+- `mie_status` internally uses `strings.Builder` instead of string concatenation
+
 ## [0.1.8] - 2026-02-08
 
 ### Added
@@ -107,6 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[0.1.9]: https://github.com/kraklabs/mie/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kraklabs/mie/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/kraklabs/mie/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/kraklabs/mie/compare/v0.1.5...v0.1.6

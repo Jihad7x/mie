@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "0.1.8" // topic traversals, tiered conflict recommendations, escapeDatalog hardening
+	mcpVersion    = "0.1.9" // 14 bugfixes: search filters, metadata parsing, topic filter, export escaping, validation
 	mcpServerName = "mie"
 )
 

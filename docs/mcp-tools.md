@@ -690,7 +690,7 @@ None.
     "content": [
       {
         "type": "text",
-        "text": "## MIE Memory Status\n\n### Graph Statistics\n- Facts: 12 (10 valid, 2 invalidated)\n- Decisions: 3 (3 active, 0 other)\n- Entities: 8\n- Events: 2\n- Topics: 5\n- Relationships: 15 edges total\n\n### Configuration\n- Storage: rocksdb (~/.mie/data/default)\n- Embeddings: enabled\n- Schema version: 1\n\n### Health\n- Database accessible (30 total nodes)\n- Embeddings enabled\n"
+        "text": "## MIE Memory Status\n\n### Graph Statistics\n- Facts: 12 (10 valid, 2 invalidated)\n- Decisions: 3 (3 active, 0 other)\n- Entities: 8\n- Events: 2\n- Topics: 5\n- Relationships: 15 edges total\n\n### Configuration\n- Storage: rocksdb (~/.mie/data/default)\n- Embeddings: enabled\n- Schema version: 1\n\n### Health\n- Database accessible (30 total nodes)\n- Embeddings: active\n"
       }
     ]
   }

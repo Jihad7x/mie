@@ -348,11 +348,6 @@ func columnsForNodeType(nodeType string) string {
 	}
 }
 
-// countNodes executes a count query for the given table and conditions.
-func (r *Reader) countNodes(ctx context.Context, table string, conditions []string, condStr string) (int, error) {
-	return r.countNodesWithJoin(ctx, table, conditions, condStr, "")
-}
-
 // countNodesWithJoin executes a count query with an optional extra join clause.
 func (r *Reader) countNodesWithJoin(ctx context.Context, table string, conditions []string, condStr, joinStr string) (int, error) {
 	colSet := map[string]bool{"id": true}
