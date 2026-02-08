@@ -5,6 +5,20 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-02-08
+
+### Fixed
+
+- Makefile `lint` target missing `--build-tags cozodb` and CGO environment variables, causing it to analyze different code than CI
+
+### Changed
+
+- Refactored `runInterview` to extract `collectInterviewAnswers`, reducing cognitive complexity below threshold
+
+### Added
+
+- ExactSearch integration test covering both `mem` and `rocksdb` storage engines
+
 ## [0.1.6] - 2026-02-08
 
 ### Added
@@ -79,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[0.1.7]: https://github.com/kraklabs/mie/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/kraklabs/mie/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/kraklabs/mie/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/kraklabs/mie/compare/v0.1.3...v0.1.4

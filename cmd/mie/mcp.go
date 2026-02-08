@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "0.1.6" // mie_delete, time-range filtering, readable timestamps
+	mcpVersion    = "0.1.7" // lint CI parity, interview refactor, ExactSearch RocksDB test
 	mcpServerName = "mie"
 )
 
