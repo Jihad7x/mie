@@ -5,6 +5,20 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2026-02-08
+
+### Added
+
+- Topic graph traversals: `facts_about_topic`, `decisions_about_topic`, `entities_about_topic` for navigating topic relationships
+- Tiered conflict recommendations based on similarity score: high (>=90%), medium (>=75%), and low similarity produce distinct guidance
+- Type-aware sort validation in `mie_list` with "name" alias mapped per node type
+
+### Fixed
+
+- `escapeDatalog` now escapes newlines, carriage returns, tabs, and null bytes to prevent CozoDB query issues with multiline strings
+- Embeddings status messages clarified: "provider active" vs "provider not configured"
+- MCP schema for `mie_query` traversal enum now includes topic traversal types
+
 ## [0.1.7] - 2026-02-08
 
 ### Fixed
@@ -93,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[0.1.8]: https://github.com/kraklabs/mie/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/kraklabs/mie/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/kraklabs/mie/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/kraklabs/mie/compare/v0.1.4...v0.1.5

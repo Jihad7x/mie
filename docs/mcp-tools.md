@@ -215,6 +215,9 @@ Search the memory graph. Supports three modes: semantic (natural language simila
 | `invalidation_chain` | Follow the chain of fact invalidations. |
 | `decision_entities` | Find entities involved in a decision (includes roles). |
 | `entity_decisions` | Find decisions involving an entity. |
+| `facts_about_topic` | Find facts linked to a topic. |
+| `decisions_about_topic` | Find decisions linked to a topic. |
+| `entities_about_topic` | Find entities linked to a topic. |
 
 ### Example: Semantic search
 

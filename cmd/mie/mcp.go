@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "0.1.7" // lint CI parity, interview refactor, ExactSearch RocksDB test
+	mcpVersion    = "0.1.8" // topic traversals, tiered conflict recommendations, escapeDatalog hardening
 	mcpServerName = "mie"
 )
 
