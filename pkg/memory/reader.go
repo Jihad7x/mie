@@ -59,35 +59,34 @@ func (r *Reader) SemanticSearch(ctx context.Context, query string, nodeTypes []s
 		var script string
 		switch nt {
 		case "fact":
-			script = fmt.Sprintf(`?[id, content, category, confidence, distance] :=
+			script = fmt.Sprintf(`?[id, content, category, confidence, valid, created_at, distance] :=
     ~mie_fact_embedding:fact_embedding_idx { fact_id | query: q, k: %d, ef: 200, bind_distance: distance },
     q = vec(%s),
-    *mie_fact { id: fact_id, content, category, confidence, valid },
-    valid = true,
+    *mie_fact { id: fact_id, content, category, confidence, valid, created_at },
     id = fact_id
     :order distance
     :limit %d`, limit*5, vecStr, limit)
 		case "decision":
-			script = fmt.Sprintf(`?[id, title, rationale, status, distance] :=
+			script = fmt.Sprintf(`?[id, title, rationale, status, created_at, distance] :=
     ~mie_decision_embedding:decision_embedding_idx { decision_id | query: q, k: %d, ef: 200, bind_distance: distance },
     q = vec(%s),
-    *mie_decision { id: decision_id, title, rationale, status },
+    *mie_decision { id: decision_id, title, rationale, status, created_at },
     id = decision_id
     :order distance
     :limit %d`, limit*5, vecStr, limit)
 		case "entity":
-			script = fmt.Sprintf(`?[id, name, kind, description, distance] :=
+			script = fmt.Sprintf(`?[id, name, kind, description, created_at, distance] :=
     ~mie_entity_embedding:entity_embedding_idx { entity_id | query: q, k: %d, ef: 200, bind_distance: distance },
     q = vec(%s),
-    *mie_entity { id: entity_id, name, kind, description },
+    *mie_entity { id: entity_id, name, kind, description, created_at },
     id = entity_id
     :order distance
     :limit %d`, limit*5, vecStr, limit)
 		case "event":
-			script = fmt.Sprintf(`?[id, title, description, event_date, distance] :=
+			script = fmt.Sprintf(`?[id, title, description, event_date, created_at, distance] :=
     ~mie_event_embedding:event_embedding_idx { event_id | query: q, k: %d, ef: 200, bind_distance: distance },
     q = vec(%s),
-    *mie_event { id: event_id, title, description, event_date },
+    *mie_event { id: event_id, title, description, event_date, created_at },
     id = event_id
     :order distance
     :limit %d`, limit*5, vecStr, limit)
@@ -135,29 +134,28 @@ func (r *Reader) ExactSearch(ctx context.Context, query string, nodeTypes []stri
 		var script string
 		switch nt {
 		case "fact":
-			script = fmt.Sprintf(`?[id, content, category, confidence] :=
-    *mie_fact { id, content, category, confidence, valid },
-    valid = true,
+			script = fmt.Sprintf(`?[id, content, category, confidence, valid, created_at] :=
+    *mie_fact { id, content, category, confidence, valid, created_at },
     str_includes(content, '%s')
     :limit %d`, escaped, limit)
 		case "decision":
-			script = fmt.Sprintf(`?[id, title, rationale, status] :=
-    *mie_decision { id, title, rationale, status },
+			script = fmt.Sprintf(`?[id, title, rationale, status, created_at] :=
+    *mie_decision { id, title, rationale, status, created_at },
     or(str_includes(title, '%s'), str_includes(rationale, '%s'))
     :limit %d`, escaped, escaped, limit)
 		case "entity":
-			script = fmt.Sprintf(`?[id, name, kind, description] :=
-    *mie_entity { id, name, kind, description },
+			script = fmt.Sprintf(`?[id, name, kind, description, created_at] :=
+    *mie_entity { id, name, kind, description, created_at },
     or(str_includes(name, '%s'), str_includes(description, '%s'))
     :limit %d`, escaped, escaped, limit)
 		case "event":
-			script = fmt.Sprintf(`?[id, title, description, event_date] :=
-    *mie_event { id, title, description, event_date },
+			script = fmt.Sprintf(`?[id, title, description, event_date, created_at] :=
+    *mie_event { id, title, description, event_date, created_at },
     or(str_includes(title, '%s'), str_includes(description, '%s'))
     :limit %d`, escaped, escaped, limit)
 		case "topic":
-			script = fmt.Sprintf(`?[id, name, description] :=
-    *mie_topic { id, name, description },
+			script = fmt.Sprintf(`?[id, name, description, created_at] :=
+    *mie_topic { id, name, description, created_at },
     or(str_includes(name, '%s'), str_includes(description, '%s'))
     :limit %d`, escaped, escaped, limit)
 		default:
@@ -227,8 +225,28 @@ func (r *Reader) ListNodes(ctx context.Context, opts tools.ListOptions) ([]any, 
 		sortOrder = "-" + sortBy
 	}
 
-	script := fmt.Sprintf(`?[%s] := *%s { %s }%s :order %s :limit %d :offset %d`,
-		columns, table, columns, condStr, sortOrder, opts.Limit, opts.Offset,
+	// When TopicName is set, resolve to topic ID and join against the edge table.
+	topicJoin := ""
+	topicCountJoin := ""
+	if opts.TopicName != "" {
+		topicID, err := r.resolveTopicName(ctx, opts.TopicName)
+		if err != nil {
+			return nil, 0, err
+		}
+		if topicID == "" {
+			return nil, 0, nil // topic not found → no results
+		}
+		edgeTable, fkCol := topicEdgeForNodeType(opts.NodeType)
+		if edgeTable == "" {
+			return nil, 0, fmt.Errorf("topic filter not supported for node type %q", opts.NodeType)
+		}
+		topicJoin = fmt.Sprintf(`, *%s { %s, topic_id }, topic_id = '%s', id = %s`,
+			edgeTable, fkCol, escapeDatalog(topicID), fkCol)
+		topicCountJoin = topicJoin
+	}
+
+	script := fmt.Sprintf(`?[%s] := *%s { %s }%s%s :order %s :limit %d :offset %d`,
+		columns, table, columns, condStr, topicJoin, sortOrder, opts.Limit, opts.Offset,
 	)
 
 	qr, err := r.backend.Query(ctx, script)
@@ -236,7 +254,7 @@ func (r *Reader) ListNodes(ctx context.Context, opts tools.ListOptions) ([]any, 
 		return nil, 0, fmt.Errorf("list nodes: %w", err)
 	}
 
-	totalCount, err := r.countNodes(ctx, table, conditions, condStr)
+	totalCount, err := r.countNodesWithJoin(ctx, table, conditions, condStr, topicCountJoin)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -250,6 +268,34 @@ func (r *Reader) ListNodes(ctx context.Context, opts tools.ListOptions) ([]any, 
 	}
 
 	return nodes, totalCount, nil
+}
+
+// resolveTopicName looks up a topic ID by name (case-insensitive).
+func (r *Reader) resolveTopicName(ctx context.Context, name string) (string, error) {
+	escaped := escapeDatalog(strings.ToLower(name))
+	script := fmt.Sprintf(`?[id] := *mie_topic { id, name }, lname = lowercase(name), lname = '%s' :limit 1`, escaped)
+	qr, err := r.backend.Query(ctx, script)
+	if err != nil {
+		return "", fmt.Errorf("resolve topic name: %w", err)
+	}
+	if len(qr.Rows) == 0 {
+		return "", nil
+	}
+	return toString(qr.Rows[0][0]), nil
+}
+
+// topicEdgeForNodeType returns the edge table and foreign key column for topic filtering.
+func topicEdgeForNodeType(nodeType string) (edgeTable, fkCol string) {
+	switch nodeType {
+	case "fact":
+		return "mie_fact_topic", "fact_id"
+	case "decision":
+		return "mie_decision_topic", "decision_id"
+	case "entity":
+		return "mie_entity_topic", "entity_id"
+	default:
+		return "", ""
+	}
 }
 
 // buildListConditions builds filter conditions for a ListNodes query.
@@ -304,6 +350,11 @@ func columnsForNodeType(nodeType string) string {
 
 // countNodes executes a count query for the given table and conditions.
 func (r *Reader) countNodes(ctx context.Context, table string, conditions []string, condStr string) (int, error) {
+	return r.countNodesWithJoin(ctx, table, conditions, condStr, "")
+}
+
+// countNodesWithJoin executes a count query with an optional extra join clause.
+func (r *Reader) countNodesWithJoin(ctx context.Context, table string, conditions []string, condStr, joinStr string) (int, error) {
 	colSet := map[string]bool{"id": true}
 	for _, cond := range conditions {
 		// Extract column name from conditions like "col = 'val'", "col >= N", "col <= N".
@@ -320,8 +371,8 @@ func (r *Reader) countNodes(ctx context.Context, table string, conditions []stri
 		countCols = append(countCols, col)
 	}
 	sort.Strings(countCols)
-	countScript := fmt.Sprintf(`?[count(id)] := *%s { %s }%s`,
-		table, strings.Join(countCols, ", "), condStr)
+	countScript := fmt.Sprintf(`?[count(id)] := *%s { %s }%s%s`,
+		table, strings.Join(countCols, ", "), condStr, joinStr)
 	countResult, err := r.backend.Query(ctx, countScript)
 	if err != nil {
 		return 0, fmt.Errorf("count nodes: %w", err)
@@ -871,8 +922,8 @@ func (r *Reader) ExportGraph(ctx context.Context, opts tools.ExportOptions) (*to
 		}
 	}
 
-	// Export relationships (edges) across all edge tables.
-	edges, totalEdges := r.exportEdges(ctx)
+	// Export relationships (edges), filtered to only edges relevant to requested node types.
+	edges, totalEdges := r.exportEdges(ctx, nodeTypes)
 	if totalEdges > 0 {
 		export.Edges = edges
 		export.Stats["edges"] = totalEdges
@@ -881,15 +932,40 @@ func (r *Reader) ExportGraph(ctx context.Context, opts tools.ExportOptions) (*to
 	return export, nil
 }
 
-// exportEdges exports all relationship edges from the graph.
-func (r *Reader) exportEdges(ctx context.Context) (map[string]any, int) {
+// edgeRequiredNodeTypes maps each edge table to the node types both endpoints must have.
+var edgeRequiredNodeTypes = map[string][2]string{
+	"mie_fact_entity":     {"fact", "entity"},
+	"mie_fact_topic":      {"fact", "topic"},
+	"mie_decision_topic":  {"decision", "topic"},
+	"mie_decision_entity": {"decision", "entity"},
+	"mie_event_decision":  {"event", "decision"},
+	"mie_entity_topic":    {"entity", "topic"},
+	"mie_invalidates":     {"fact", "fact"},
+}
+
+// exportEdges exports relationship edges, filtered to only edges where both endpoint
+// node types are in the requested set.
+func (r *Reader) exportEdges(ctx context.Context, nodeTypes []string) (map[string]any, int) {
 	edges := make(map[string]any)
 	totalEdges := 0
+
+	typeSet := make(map[string]bool, len(nodeTypes))
+	for _, nt := range nodeTypes {
+		typeSet[nt] = true
+	}
 
 	for tableName, cols := range ValidEdgeTables {
 		if len(cols) < 2 {
 			continue
 		}
+
+		// Filter: only export edges whose endpoint types are both in the requested set.
+		if req, ok := edgeRequiredNodeTypes[tableName]; ok {
+			if !typeSet[req[0]] || !typeSet[req[1]] {
+				continue
+			}
+		}
+
 		colList := strings.Join(cols, ", ")
 		script := fmt.Sprintf(`?[%s] := *%s { %s }`, colList, tableName, colList)
 
@@ -1010,73 +1086,87 @@ func (r *Reader) parseSearchResult(nodeType string, row []any, headers []string)
 		NodeType: nodeType,
 	}
 
+	// Detect whether this is a semantic result (has "distance" column) or exact.
+	hasDist := len(headers) > 0 && headers[len(headers)-1] == "distance"
+
 	switch nodeType {
 	case "fact":
-		// id, content, category, confidence, distance
+		// Semantic: id(0), content(1), category(2), confidence(3), valid(4), created_at(5), distance(6)
+		// Exact:    id(0), content(1), category(2), confidence(3), valid(4), created_at(5)
 		sr.ID = toString(row[0])
 		sr.Content = toString(row[1])
 		sr.Detail = toString(row[2])
-		if len(row) > 4 {
-			sr.Distance = toFloat64(row[4])
+		if hasDist {
+			sr.Distance = toFloat64(row[6])
 		}
 		sr.Metadata = &tools.Fact{
-			ID:       sr.ID,
-			Content:  sr.Content,
-			Category: toString(row[2]),
-			Valid:    true, // Search queries already filter valid = true in Datalog
+			ID:         sr.ID,
+			Content:    sr.Content,
+			Category:   toString(row[2]),
+			Confidence: toFloat64(row[3]),
+			Valid:      toBool(row[4]),
+			CreatedAt:  toInt64(row[5]),
 		}
 	case "decision":
-		// id, title, rationale, status, distance
+		// Semantic: id(0), title(1), rationale(2), status(3), created_at(4), distance(5)
+		// Exact:    id(0), title(1), rationale(2), status(3), created_at(4)
 		sr.ID = toString(row[0])
 		sr.Content = toString(row[1])
 		sr.Detail = toString(row[2])
-		if len(row) > 4 {
-			sr.Distance = toFloat64(row[4])
+		if hasDist {
+			sr.Distance = toFloat64(row[5])
 		}
 		sr.Metadata = &tools.Decision{
-			ID:    sr.ID,
-			Title: sr.Content,
+			ID:        sr.ID,
+			Title:     sr.Content,
+			Rationale: toString(row[2]),
+			Status:    toString(row[3]),
+			CreatedAt: toInt64(row[4]),
 		}
 	case "entity":
-		// id, name, kind, description, distance
+		// Semantic: id(0), name(1), kind(2), description(3), created_at(4), distance(5)
+		// Exact:    id(0), name(1), kind(2), description(3), created_at(4)
 		sr.ID = toString(row[0])
 		sr.Content = toString(row[1])
 		sr.Detail = toString(row[3])
-		if len(row) > 4 {
-			sr.Distance = toFloat64(row[4])
+		if hasDist {
+			sr.Distance = toFloat64(row[5])
 		}
 		sr.Metadata = &tools.Entity{
-			ID:   sr.ID,
-			Name: sr.Content,
-			Kind: toString(row[2]),
+			ID:          sr.ID,
+			Name:        sr.Content,
+			Kind:        toString(row[2]),
+			Description: toString(row[3]),
+			CreatedAt:   toInt64(row[4]),
 		}
 	case "event":
-		// id, title, description, event_date, distance
+		// Semantic: id(0), title(1), description(2), event_date(3), created_at(4), distance(5)
+		// Exact:    id(0), title(1), description(2), event_date(3), created_at(4)
 		sr.ID = toString(row[0])
 		sr.Content = toString(row[1])
 		sr.Detail = toString(row[2])
-		if len(row) > 4 {
-			sr.Distance = toFloat64(row[4])
+		if hasDist {
+			sr.Distance = toFloat64(row[5])
 		}
 		sr.Metadata = &tools.Event{
-			ID:    sr.ID,
-			Title: sr.Content,
+			ID:        sr.ID,
+			Title:     sr.Content,
+			EventDate: toString(row[3]),
+			CreatedAt: toInt64(row[4]),
 		}
 	case "topic":
-		// id, name, description
+		// Exact: id(0), name(1), description(2), created_at(3)
 		sr.ID = toString(row[0])
 		sr.Content = toString(row[1])
 		if len(row) > 2 {
 			sr.Detail = toString(row[2])
 		}
 		sr.Metadata = &tools.Topic{
-			ID:   sr.ID,
-			Name: sr.Content,
+			ID:        sr.ID,
+			Name:      sr.Content,
+			CreatedAt: toInt64(row[3]),
 		}
 	}
-
-	// For exact search results, check for headers to determine column positions
-	_ = headers
 
 	return sr
 }

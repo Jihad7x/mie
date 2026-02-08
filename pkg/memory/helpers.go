@@ -49,7 +49,7 @@ var ValidEntityRoles = []string{
 var ValidEdgeTables = map[string][]string{
 	"mie_invalidates":     {"new_fact_id", "old_fact_id"},
 	"mie_decision_topic":  {"decision_id", "topic_id"},
-	"mie_decision_entity": {"decision_id", "entity_id"},
+	"mie_decision_entity": {"decision_id", "entity_id", "role"},
 	"mie_event_decision":  {"event_id", "decision_id"},
 	"mie_fact_entity":     {"fact_id", "entity_id"},
 	"mie_fact_topic":      {"fact_id", "topic_id"},
