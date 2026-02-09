@@ -20,21 +20,21 @@ import (
 
 // StatusResult represents the memory graph status for JSON output.
 type StatusResult struct {
-	StorageEngine    string    `json:"storage_engine"`
-	DataDir          string    `json:"data_dir"`
-	Connected        bool      `json:"connected"`
-	Facts            int       `json:"facts"`
-	ValidFacts       int       `json:"valid_facts"`
-	InvalidatedFacts int       `json:"invalidated_facts"`
-	Decisions        int       `json:"decisions"`
-	ActiveDecisions  int       `json:"active_decisions"`
-	Entities         int       `json:"entities"`
-	Events           int       `json:"events"`
-	Topics           int       `json:"topics"`
-	Edges            int       `json:"edges"`
-	EmbeddingsEnabled bool    `json:"embeddings_enabled"`
-	Timestamp        time.Time `json:"timestamp"`
-	Error            string    `json:"error,omitempty"`
+	StorageEngine     string    `json:"storage_engine"`
+	DataDir           string    `json:"data_dir"`
+	Connected         bool      `json:"connected"`
+	Facts             int       `json:"facts"`
+	ValidFacts        int       `json:"valid_facts"`
+	InvalidatedFacts  int       `json:"invalidated_facts"`
+	Decisions         int       `json:"decisions"`
+	ActiveDecisions   int       `json:"active_decisions"`
+	Entities          int       `json:"entities"`
+	Events            int       `json:"events"`
+	Topics            int       `json:"topics"`
+	Edges             int       `json:"edges"`
+	EmbeddingsEnabled bool      `json:"embeddings_enabled"`
+	Timestamp         time.Time `json:"timestamp"`
+	Error             string    `json:"error,omitempty"`
 }
 
 // runStatus displays memory graph statistics.
@@ -75,10 +75,10 @@ Examples:
 	}
 
 	result := &StatusResult{
-		StorageEngine:    cfg.Storage.Engine,
-		DataDir:          dataDir,
+		StorageEngine:     cfg.Storage.Engine,
+		DataDir:           dataDir,
 		EmbeddingsEnabled: cfg.Embedding.Enabled,
-		Timestamp:        time.Now(),
+		Timestamp:         time.Now(),
 	}
 
 	// Check if data directory exists

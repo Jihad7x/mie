@@ -37,7 +37,7 @@ type StorageConfig struct {
 // EmbeddingConfig contains embedding provider configuration.
 type EmbeddingConfig struct {
 	Enabled    bool   `yaml:"enabled"`
-	Provider   string `yaml:"provider"`   // ollama, openai, nomic, mock
+	Provider   string `yaml:"provider"` // ollama, openai, nomic, mock
 	BaseURL    string `yaml:"base_url"`
 	Model      string `yaml:"model"`
 	Dimensions int    `yaml:"dimensions"` // 768 for nomic, 1536 for openai

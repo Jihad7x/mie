@@ -29,10 +29,10 @@ func TestGetStringArg(t *testing.T) {
 
 func TestGetFloat64Arg(t *testing.T) {
 	args := map[string]any{
-		"float":   0.85,
-		"int":     42,
-		"int64":   int64(100),
-		"str":     "not a number",
+		"float": 0.85,
+		"int":   42,
+		"int64": int64(100),
+		"str":   "not a number",
 	}
 
 	if got := GetFloat64Arg(args, "float", 0.5); got != 0.85 {
@@ -68,9 +68,9 @@ func TestGetIntArg(t *testing.T) {
 
 func TestGetBoolArg(t *testing.T) {
 	args := map[string]any{
-		"yes":  true,
-		"no":   false,
-		"str":  "true",
+		"yes": true,
+		"no":  false,
+		"str": "true",
 	}
 
 	if got := GetBoolArg(args, "yes", false); got != true {
