@@ -118,25 +118,10 @@ func matchesSearchFilters(r SearchResult, f searchFilters) bool {
 		if f.Kind != "" && m.Kind != f.Kind {
 			return false
 		}
-		if f.Category != "" {
-			return false // category filter implies facts only
-		}
 		createdAt = m.CreatedAt
 	case *Decision:
-		if f.Category != "" {
-			return false // category filter implies facts only
-		}
-		if f.Kind != "" {
-			return false // kind filter implies entities only
-		}
 		createdAt = m.CreatedAt
 	case *Event:
-		if f.Category != "" {
-			return false // category filter implies facts only
-		}
-		if f.Kind != "" {
-			return false // kind filter implies entities only
-		}
 		createdAt = m.CreatedAt
 	}
 	if f.CreatedAfter > 0 && createdAt < f.CreatedAfter {

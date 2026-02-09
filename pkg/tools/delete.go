@@ -71,6 +71,15 @@ func removeRelationship(ctx context.Context, client Querier, args map[string]any
 		return NewError("No edge fields provided. Specify the node IDs that form the edge (e.g., fact_id, entity_id)."), nil
 	}
 
+	// Check if the edge exists before attempting removal.
+	exists, err := client.EdgeExists(ctx, edgeType, fields)
+	if err != nil {
+		return NewError(fmt.Sprintf("Failed to check relationship: %v", err)), nil
+	}
+	if !exists {
+		return NewError(fmt.Sprintf("Relationship not found in `%s` with the given fields.", edgeType)), nil
+	}
+
 	if err := client.RemoveRelationship(ctx, edgeType, fields); err != nil {
 		return NewError(fmt.Sprintf("Failed to remove relationship: %v", err)), nil
 	}

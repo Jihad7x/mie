@@ -6,6 +6,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -48,6 +49,17 @@ func Store(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 		return NewError("Missing required parameter: type"), nil
 	}
 
+	// Pre-validate invalidates target before storing anything.
+	invalidates := GetStringArg(args, "invalidates", "")
+	if invalidates != "" {
+		if !strings.HasPrefix(invalidates, "fact:") {
+			return NewError(fmt.Sprintf("invalidates must reference a fact ID (got %q)", invalidates)), nil
+		}
+		if target, err := client.GetNodeByID(ctx, invalidates); err != nil || target == nil {
+			return NewError(fmt.Sprintf("invalidates target %q not found", invalidates)), nil
+		}
+	}
+
 	nodeID, summary, err := storeNode(ctx, client, args, nodeType)
 	if err != nil {
 		return NewError(fmt.Sprintf("Failed to store %s: %v", nodeType, err)), nil
@@ -56,7 +68,7 @@ func Store(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 		return NewError(fmt.Sprintf("Invalid type %q. Must be one of: fact, decision, entity, event, topic", nodeType)), nil
 	}
 
-	// Handle invalidation
+	// Handle invalidation (already pre-validated above)
 	toolErr, invalidationMsg := handleInvalidation(ctx, client, args, nodeID)
 	if toolErr != nil {
 		return toolErr, nil
@@ -108,8 +120,12 @@ func storeNode(ctx context.Context, client Querier, args map[string]any, nodeTyp
 		if err != nil {
 			return "", "", err
 		}
-		summary := fmt.Sprintf("Name: %q\nKind: %s | Source: %s",
-			result.Name, result.Kind, result.SourceAgent)
+		action := "Stored new"
+		if result.CreatedAt != result.UpdatedAt {
+			action = "Updated existing"
+		}
+		summary := fmt.Sprintf("%s entity\nName: %q\nKind: %s | Source: %s",
+			action, result.Name, result.Kind, result.SourceAgent)
 		if result.Description != "" {
 			summary += fmt.Sprintf("\nDescription: %s", Truncate(result.Description, 100))
 		}
@@ -194,10 +210,16 @@ func storeDecision(ctx context.Context, client Querier, args map[string]any, sou
 	if len(rationale) > maxContentLength {
 		return nil, fmt.Errorf("rationale exceeds maximum length (%d > %d bytes)", len(rationale), maxContentLength)
 	}
+	alternatives := GetStringArg(args, "alternatives", "[]")
+	var altJSON []any
+	if err := json.Unmarshal([]byte(alternatives), &altJSON); err != nil {
+		return nil, fmt.Errorf("alternatives must be a valid JSON array (got %q)", alternatives)
+	}
+
 	return client.StoreDecision(ctx, StoreDecisionRequest{
 		Title:              title,
 		Rationale:          rationale,
-		Alternatives:       GetStringArg(args, "alternatives", "[]"),
+		Alternatives:       alternatives,
 		Context:            GetStringArg(args, "context", ""),
 		SourceAgent:        sourceAgent,
 		SourceConversation: sourceConversation,
@@ -317,6 +339,9 @@ func storeRelationships(ctx context.Context, client Querier, sourceNodeID string
 		}
 
 		fields := buildEdgeFields(edgeType, sourceNodeID, targetID, relMap)
+		if edgeType == "decision_entity" && fields["role"] == "" {
+			sb.WriteString(fmt.Sprintf("- Warning: decision_entity edge to [%s] has empty role\n", targetID))
+		}
 		tableName := "mie_" + edgeType
 		if err := client.AddRelationship(ctx, tableName, fields); err != nil {
 			sb.WriteString(fmt.Sprintf("- Failed %s -> [%s]: %v\n", edgeType, targetID, err))

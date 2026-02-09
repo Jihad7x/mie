@@ -8,37 +8,39 @@ import "context"
 
 // MockQuerier is a mock implementation of the Querier interface for unit testing.
 type MockQuerier struct {
-	StoreFactFunc              func(ctx context.Context, req StoreFactRequest) (*Fact, error)
-	StoreDecisionFunc          func(ctx context.Context, req StoreDecisionRequest) (*Decision, error)
-	StoreEntityFunc            func(ctx context.Context, req StoreEntityRequest) (*Entity, error)
-	StoreEventFunc             func(ctx context.Context, req StoreEventRequest) (*Event, error)
-	StoreTopicFunc             func(ctx context.Context, req StoreTopicRequest) (*Topic, error)
-	InvalidateFactFunc         func(ctx context.Context, oldFactID, newFactID, reason string) error
-	AddRelationshipFunc        func(ctx context.Context, edgeType string, fields map[string]string) error
-	DeleteNodeFunc             func(ctx context.Context, nodeID string) error
-	RemoveRelationshipFunc     func(ctx context.Context, edgeType string, fields map[string]string) error
-	SemanticSearchFunc         func(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error)
-	ExactSearchFunc            func(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error)
-	GetNodeByIDFunc            func(ctx context.Context, nodeID string) (any, error)
-	ListNodesFunc              func(ctx context.Context, opts ListOptions) ([]any, int, error)
-	GetRelatedEntitiesFunc     func(ctx context.Context, factID string) ([]Entity, error)
-	GetFactsAboutEntityFunc    func(ctx context.Context, entityID string) ([]Fact, error)
-	GetDecisionEntitiesFunc    func(ctx context.Context, decisionID string) ([]EntityWithRole, error)
-	GetInvalidationChainFunc   func(ctx context.Context, factID string) ([]Invalidation, error)
-	GetRelatedFactsFunc        func(ctx context.Context, entityID string) ([]Fact, error)
-	GetEntityDecisionsFunc     func(ctx context.Context, entityID string) ([]Decision, error)
-	GetFactsAboutTopicFunc     func(ctx context.Context, topicID string) ([]Fact, error)
-	GetDecisionsAboutTopicFunc func(ctx context.Context, topicID string) ([]Decision, error)
-	GetEntitiesAboutTopicFunc  func(ctx context.Context, topicID string) ([]Entity, error)
-	UpdateDescriptionFunc      func(ctx context.Context, nodeID, newDescription string) error
-	UpdateStatusFunc           func(ctx context.Context, nodeID, newStatus string) error
-	DetectConflictsFunc        func(ctx context.Context, opts ConflictOptions) ([]Conflict, error)
-	CheckNewFactConflictsFunc  func(ctx context.Context, content, category string) ([]Conflict, error)
-	GetStatsFunc               func(ctx context.Context) (*GraphStats, error)
-	ExportGraphFunc            func(ctx context.Context, opts ExportOptions) (*ExportData, error)
-	IncrementCounterFunc       func(ctx context.Context, key string) error
-	IncrementCounterByFunc     func(ctx context.Context, key string, n int) error
-	EmbeddingsEnabledFunc      func() bool
+	StoreFactFunc                        func(ctx context.Context, req StoreFactRequest) (*Fact, error)
+	StoreDecisionFunc                    func(ctx context.Context, req StoreDecisionRequest) (*Decision, error)
+	StoreEntityFunc                      func(ctx context.Context, req StoreEntityRequest) (*Entity, error)
+	StoreEventFunc                       func(ctx context.Context, req StoreEventRequest) (*Event, error)
+	StoreTopicFunc                       func(ctx context.Context, req StoreTopicRequest) (*Topic, error)
+	InvalidateFactFunc                   func(ctx context.Context, oldFactID, newFactID, reason string) error
+	InvalidateFactWithoutReplacementFunc func(ctx context.Context, factID, reason string) error
+	AddRelationshipFunc                  func(ctx context.Context, edgeType string, fields map[string]string) error
+	DeleteNodeFunc                       func(ctx context.Context, nodeID string) error
+	RemoveRelationshipFunc               func(ctx context.Context, edgeType string, fields map[string]string) error
+	EdgeExistsFunc                       func(ctx context.Context, edgeType string, fields map[string]string) (bool, error)
+	SemanticSearchFunc                   func(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error)
+	ExactSearchFunc                      func(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error)
+	GetNodeByIDFunc                      func(ctx context.Context, nodeID string) (any, error)
+	ListNodesFunc                        func(ctx context.Context, opts ListOptions) ([]any, int, error)
+	GetRelatedEntitiesFunc               func(ctx context.Context, factID string) ([]Entity, error)
+	GetFactsAboutEntityFunc              func(ctx context.Context, entityID string) ([]Fact, error)
+	GetDecisionEntitiesFunc              func(ctx context.Context, decisionID string) ([]EntityWithRole, error)
+	GetInvalidationChainFunc             func(ctx context.Context, factID string) ([]Invalidation, error)
+	GetRelatedFactsFunc                  func(ctx context.Context, entityID string) ([]Fact, error)
+	GetEntityDecisionsFunc               func(ctx context.Context, entityID string) ([]Decision, error)
+	GetFactsAboutTopicFunc               func(ctx context.Context, topicID string) ([]Fact, error)
+	GetDecisionsAboutTopicFunc           func(ctx context.Context, topicID string) ([]Decision, error)
+	GetEntitiesAboutTopicFunc            func(ctx context.Context, topicID string) ([]Entity, error)
+	UpdateDescriptionFunc                func(ctx context.Context, nodeID, newDescription string) error
+	UpdateStatusFunc                     func(ctx context.Context, nodeID, newStatus string) error
+	DetectConflictsFunc                  func(ctx context.Context, opts ConflictOptions) ([]Conflict, error)
+	CheckNewFactConflictsFunc            func(ctx context.Context, content, category string) ([]Conflict, error)
+	GetStatsFunc                         func(ctx context.Context) (*GraphStats, error)
+	ExportGraphFunc                      func(ctx context.Context, opts ExportOptions) (*ExportData, error)
+	IncrementCounterFunc                 func(ctx context.Context, key string) error
+	IncrementCounterByFunc               func(ctx context.Context, key string, n int) error
+	EmbeddingsEnabledFunc                func() bool
 }
 
 func (m *MockQuerier) StoreFact(ctx context.Context, req StoreFactRequest) (*Fact, error) {
@@ -83,6 +85,13 @@ func (m *MockQuerier) InvalidateFact(ctx context.Context, oldFactID, newFactID, 
 	return nil
 }
 
+func (m *MockQuerier) InvalidateFactWithoutReplacement(ctx context.Context, factID, reason string) error {
+	if m.InvalidateFactWithoutReplacementFunc != nil {
+		return m.InvalidateFactWithoutReplacementFunc(ctx, factID, reason)
+	}
+	return nil
+}
+
 func (m *MockQuerier) AddRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
 	if m.AddRelationshipFunc != nil {
 		return m.AddRelationshipFunc(ctx, edgeType, fields)
@@ -102,6 +111,13 @@ func (m *MockQuerier) RemoveRelationship(ctx context.Context, edgeType string, f
 		return m.RemoveRelationshipFunc(ctx, edgeType, fields)
 	}
 	return nil
+}
+
+func (m *MockQuerier) EdgeExists(ctx context.Context, edgeType string, fields map[string]string) (bool, error) {
+	if m.EdgeExistsFunc != nil {
+		return m.EdgeExistsFunc(ctx, edgeType, fields)
+	}
+	return true, nil
 }
 
 func (m *MockQuerier) SemanticSearch(ctx context.Context, query string, nodeTypes []string, limit int) ([]SearchResult, error) {

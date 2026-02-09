@@ -217,15 +217,36 @@ func TestUpdate_InvalidAction(t *testing.T) {
 	}
 }
 
-func TestUpdate_InvalidateMissingReplacement(t *testing.T) {
-	mock := &MockQuerier{}
-	result, _ := Update(context.Background(), mock, map[string]any{
+func TestUpdate_InvalidateWithoutReplacement(t *testing.T) {
+	invalidated := false
+	mock := &MockQuerier{
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			return &Fact{ID: nodeID, Content: "Old fact", Valid: true}, nil
+		},
+		InvalidateFactWithoutReplacementFunc: func(ctx context.Context, factID, reason string) error {
+			invalidated = true
+			if factID != "fact:abc123" {
+				t.Errorf("Expected factID=fact:abc123, got %s", factID)
+			}
+			return nil
+		},
+	}
+	result, err := Update(context.Background(), mock, map[string]any{
 		"node_id": "fact:abc123",
 		"action":  "invalidate",
-		"reason":  "test",
+		"reason":  "no longer relevant",
 	})
-	if !result.IsError {
-		t.Error("Update() should require replacement_id for invalidation")
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Update() returned error: %s", result.Text)
+	}
+	if !invalidated {
+		t.Error("Update() should have called InvalidateFactWithoutReplacement")
+	}
+	if !strings.Contains(result.Text, "Invalidated") {
+		t.Error("Update() should mention invalidation in output")
 	}
 }
 

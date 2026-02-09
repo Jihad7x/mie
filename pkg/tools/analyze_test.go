@@ -96,7 +96,7 @@ func TestAnalyze_WithConflicts(t *testing.T) {
 		CheckNewFactConflictsFunc: func(ctx context.Context, content, category string) ([]Conflict, error) {
 			return []Conflict{
 				{
-					FactA:      Fact{ID: "fact:old123", Content: "User lives in Buenos Aires", Category: "personal"},
+					FactB:      Fact{ID: "fact:old123", Content: "User lives in Buenos Aires", Category: "personal"},
 					Similarity: 0.91,
 				},
 			}, nil

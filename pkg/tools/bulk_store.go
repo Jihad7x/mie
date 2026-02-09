@@ -6,8 +6,10 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 const maxBulkItems = 50
@@ -31,6 +33,16 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 	}
 	if len(itemSlice) > maxBulkItems {
 		return NewError(fmt.Sprintf("Too many items: %d (max %d)", len(itemSlice), maxBulkItems)), nil
+	}
+
+	// Pre-validate all items before storing any.
+	if validationErrors := bulkPreValidate(itemSlice); len(validationErrors) > 0 {
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("Validation failed for %d item(s). Nothing was stored.\n\n", len(validationErrors)))
+		for _, e := range validationErrors {
+			sb.WriteString(fmt.Sprintf("  - %s\n", e))
+		}
+		return NewError(sb.String()), nil
 	}
 
 	stored, typeCounts, errors := bulkStoreNodes(ctx, client, itemSlice)
@@ -204,6 +216,84 @@ func pluralizeNodeType(nt string, count int) string {
 		return fmt.Sprintf("%d entities", count)
 	}
 	return fmt.Sprintf("%d %ss", count, nt)
+}
+
+// bulkPreValidate checks all items for required fields and valid enum values
+// before any storage occurs. Returns a list of validation errors (empty = all valid).
+func bulkPreValidate(items []any) []string {
+	validTypes := map[string]bool{"fact": true, "decision": true, "entity": true, "event": true, "topic": true}
+	var errors []string
+	for i, raw := range items {
+		itemArgs, ok := raw.(map[string]any)
+		if !ok {
+			errors = append(errors, fmt.Sprintf("item[%d]: not a valid object", i))
+			continue
+		}
+		nodeType := GetStringArg(itemArgs, "type", "")
+		if nodeType == "" {
+			errors = append(errors, fmt.Sprintf("item[%d]: missing required parameter: type", i))
+			continue
+		}
+		if !validTypes[nodeType] {
+			errors = append(errors, fmt.Sprintf("item[%d]: invalid type %q", i, nodeType))
+			continue
+		}
+
+		switch nodeType {
+		case "fact":
+			content := GetStringArg(itemArgs, "content", "")
+			if content == "" {
+				errors = append(errors, fmt.Sprintf("item[%d] (fact): content is required", i))
+			} else if len(content) > maxContentLength {
+				errors = append(errors, fmt.Sprintf("item[%d] (fact): content exceeds maximum length", i))
+			}
+			category := GetStringArg(itemArgs, "category", "general")
+			if !validFactCategories[category] {
+				errors = append(errors, fmt.Sprintf("item[%d] (fact): invalid category %q", i, category))
+			}
+			confidence := GetFloat64Arg(itemArgs, "confidence", 0.8)
+			if confidence < 0 || confidence > 1.0 {
+				errors = append(errors, fmt.Sprintf("item[%d] (fact): confidence must be between 0.0 and 1.0", i))
+			}
+		case "decision":
+			if GetStringArg(itemArgs, "title", "") == "" {
+				errors = append(errors, fmt.Sprintf("item[%d] (decision): title is required", i))
+			}
+			if GetStringArg(itemArgs, "rationale", "") == "" {
+				errors = append(errors, fmt.Sprintf("item[%d] (decision): rationale is required", i))
+			}
+			alternatives := GetStringArg(itemArgs, "alternatives", "[]")
+			var altJSON []any
+			if err := json.Unmarshal([]byte(alternatives), &altJSON); err != nil {
+				errors = append(errors, fmt.Sprintf("item[%d] (decision): alternatives must be a valid JSON array", i))
+			}
+		case "entity":
+			if GetStringArg(itemArgs, "name", "") == "" {
+				errors = append(errors, fmt.Sprintf("item[%d] (entity): name is required", i))
+			}
+			kind := GetStringArg(itemArgs, "kind", "")
+			if kind == "" {
+				errors = append(errors, fmt.Sprintf("item[%d] (entity): kind is required", i))
+			} else if !validEntityKinds[kind] {
+				errors = append(errors, fmt.Sprintf("item[%d] (entity): invalid kind %q", i, kind))
+			}
+		case "event":
+			if GetStringArg(itemArgs, "title", "") == "" {
+				errors = append(errors, fmt.Sprintf("item[%d] (event): title is required", i))
+			}
+			eventDate := GetStringArg(itemArgs, "event_date", "")
+			if eventDate == "" {
+				errors = append(errors, fmt.Sprintf("item[%d] (event): event_date is required", i))
+			} else if _, err := time.Parse("2006-01-02", eventDate); err != nil {
+				errors = append(errors, fmt.Sprintf("item[%d] (event): invalid event_date format %q", i, eventDate))
+			}
+		case "topic":
+			if GetStringArg(itemArgs, "name", "") == "" {
+				errors = append(errors, fmt.Sprintf("item[%d] (topic): name is required", i))
+			}
+		}
+	}
+	return errors
 }
 
 // toInt converts a JSON number to int. JSON numbers from map[string]any are float64.

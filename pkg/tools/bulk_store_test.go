@@ -204,11 +204,11 @@ func TestBulkStore_InvalidItemType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BulkStore() error = %v", err)
 	}
-	if result.IsError {
-		t.Fatalf("BulkStore() should not be error result for invalid item type")
+	if !result.IsError {
+		t.Fatalf("BulkStore() should return error for invalid item type (pre-validation)")
 	}
-	if !strings.Contains(result.Text, "Stored 0 items") {
-		t.Errorf("expected 'Stored 0 items', got: %s", result.Text)
+	if !strings.Contains(result.Text, "Validation failed") {
+		t.Errorf("expected 'Validation failed', got: %s", result.Text)
 	}
 	if !strings.Contains(result.Text, "invalid type") {
 		t.Errorf("expected 'invalid type' in errors, got: %s", result.Text)
@@ -224,6 +224,9 @@ func TestBulkStore_ItemMissingType(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("BulkStore() error = %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("BulkStore() should return error for missing type (pre-validation)")
 	}
 	if !strings.Contains(result.Text, "missing required parameter: type") {
 		t.Errorf("expected type error, got: %s", result.Text)

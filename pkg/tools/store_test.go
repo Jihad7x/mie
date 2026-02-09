@@ -187,6 +187,12 @@ func TestStore_EntityInvalidKind(t *testing.T) {
 func TestStore_WithInvalidation(t *testing.T) {
 	invalidated := false
 	mock := &MockQuerier{
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			if nodeID == "fact:old123" {
+				return &Fact{ID: "fact:old123", Content: "Old fact", Valid: true}, nil
+			}
+			return nil, nil
+		},
 		InvalidateFactFunc: func(ctx context.Context, oldFactID, newFactID, reason string) error {
 			invalidated = true
 			if oldFactID != "fact:old123" {

@@ -68,7 +68,7 @@ func Analyze(ctx context.Context, client Querier, args map[string]any) (*ToolRes
 		sb.WriteString("### Potential Conflicts\n")
 		for _, c := range conflicts {
 			fmt.Fprintf(&sb, "- New content may conflict with [%s] %q (similarity: %.0f%%)\n",
-				c.FactA.ID, Truncate(c.FactA.Content, 80), c.Similarity*100)
+				c.FactB.ID, Truncate(c.FactB.Content, 80), c.Similarity*100)
 		}
 		sb.WriteString("\n")
 	}

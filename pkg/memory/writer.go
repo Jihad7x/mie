@@ -290,6 +290,36 @@ func (w *Writer) InvalidateFact(ctx context.Context, oldFactID, newFactID, reaso
 	return nil
 }
 
+// InvalidateFactWithoutReplacement marks a fact as invalid without a replacement.
+func (w *Writer) InvalidateFactWithoutReplacement(ctx context.Context, factID, reason string) error {
+	if factID == "" {
+		return fmt.Errorf("fact ID is required for invalidation")
+	}
+
+	// Verify the fact exists.
+	check := fmt.Sprintf(`?[id] := *mie_fact { id }, id = '%s'`, escapeDatalog(factID))
+	result, err := w.backend.Query(ctx, check)
+	if err != nil || len(result.Rows) == 0 {
+		return fmt.Errorf("fact %q not found", factID)
+	}
+
+	now := time.Now().Unix()
+	mutation := fmt.Sprintf(
+		`?[id, content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at] :=
+    *mie_fact { id, content, category, confidence, source_agent, source_conversation, created_at },
+    id = '%s',
+    valid = false,
+    updated_at = %d
+:put mie_fact { id => content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at }`,
+		escapeDatalog(factID), now,
+	)
+	if err := w.backend.Execute(ctx, mutation); err != nil {
+		return fmt.Errorf("invalidate fact %s: %w", factID, err)
+	}
+
+	return nil
+}
+
 // AddRelationship creates an edge between two nodes in the memory graph.
 func (w *Writer) AddRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
 	schema, ok := ValidEdgeTables[edgeType]
@@ -442,7 +472,8 @@ func (w *Writer) WaitForEmbeddings() {
 // storeEmbeddingAsync generates and stores an embedding in the background.
 func (w *Writer) storeEmbeddingAsync(table, idCol, nodeID, text string) {
 	defer w.embeddingWg.Done()
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	embedding, err := w.embedder.Generate(ctx, text)
 	if err != nil {
 		w.logger.Warn("failed to generate embedding", "node_id", nodeID, "table", table, "error", err)
@@ -556,8 +587,9 @@ func (w *Writer) DeleteNode(ctx context.Context, nodeID string) error {
 	embTable, embCol := embeddingTableForType(nodeType)
 	if embTable != "" {
 		embMut := fmt.Sprintf(`?[%s] <- [['%s']] :rm %s { %s }`, embCol, escaped, embTable, embCol)
-		// Ignore error — embedding may not exist.
-		_ = w.backend.Execute(ctx, embMut)
+		if err := w.backend.Execute(ctx, embMut); err != nil {
+			w.logger.Warn("failed to delete embedding (may cause orphaned HNSW entry)", "node_id", nodeID, "table", embTable, "error", err)
+		}
 	}
 
 	// Cascade-delete all edges referencing this node.
@@ -566,6 +598,37 @@ func (w *Writer) DeleteNode(ctx context.Context, nodeID string) error {
 	}
 
 	return nil
+}
+
+// EdgeExists checks whether a specific edge exists in the given edge table.
+func (w *Writer) EdgeExists(ctx context.Context, edgeType string, fields map[string]string) (bool, error) {
+	schema, ok := ValidEdgeTables[edgeType]
+	if !ok {
+		return false, fmt.Errorf("unknown edge type: %s", edgeType)
+	}
+
+	var conditions []string
+	for _, col := range schema.Keys {
+		val, exists := fields[col]
+		if !exists {
+			return false, fmt.Errorf("missing required field %q for edge type %s", col, edgeType)
+		}
+		conditions = append(conditions, fmt.Sprintf("%s = '%s'", col, escapeDatalog(val)))
+	}
+
+	allCols := schema.AllColumns()
+	query := fmt.Sprintf(`?[%s] := *%s { %s }, %s`,
+		strings.Join(schema.Keys, ", "),
+		edgeType,
+		strings.Join(allCols, ", "),
+		strings.Join(conditions, ", "),
+	)
+
+	result, err := w.backend.Query(ctx, query)
+	if err != nil {
+		return false, fmt.Errorf("check edge existence: %w", err)
+	}
+	return len(result.Rows) > 0, nil
 }
 
 // RemoveRelationship deletes a specific edge between two nodes.

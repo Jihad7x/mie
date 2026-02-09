@@ -262,6 +262,10 @@ func (c *Client) InvalidateFact(ctx context.Context, oldFactID, newFactID, reaso
 	return c.writer.InvalidateFact(ctx, oldFactID, newFactID, reason)
 }
 
+func (c *Client) InvalidateFactWithoutReplacement(ctx context.Context, factID, reason string) error {
+	return c.writer.InvalidateFactWithoutReplacement(ctx, factID, reason)
+}
+
 func (c *Client) AddRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
 	return c.writer.AddRelationship(ctx, edgeType, fields)
 }
@@ -272,6 +276,10 @@ func (c *Client) DeleteNode(ctx context.Context, nodeID string) error {
 
 func (c *Client) RemoveRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
 	return c.writer.RemoveRelationship(ctx, edgeType, fields)
+}
+
+func (c *Client) EdgeExists(ctx context.Context, edgeType string, fields map[string]string) (bool, error) {
+	return c.writer.EdgeExists(ctx, edgeType, fields)
 }
 
 // --- tools.Querier read operations ---

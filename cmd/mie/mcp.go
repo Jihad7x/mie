@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "0.1.9" // 14 bugfixes: search filters, metadata parsing, topic filter, export escaping, validation
+	mcpVersion    = "0.2.0" // 14 bugfixes: atomicity, export syntax, filter pass-through, validation, HNSW safety
 	mcpServerName = "mie"
 )
 
@@ -755,7 +755,7 @@ func (s *mcpServer) getTools() []mcpTool {
 					},
 					"node_types": map[string]any{
 						"type":        "array",
-						"items":       map[string]any{"type": "string", "enum": []string{"fact", "decision", "entity", "event"}},
+						"items":       map[string]any{"type": "string", "enum": []string{"fact", "decision", "entity", "event", "topic"}},
 						"description": "Node types to search (default: all)",
 					},
 					"limit": map[string]any{
@@ -832,7 +832,7 @@ func (s *mcpServer) getTools() []mcpTool {
 					},
 					"replacement_id": map[string]any{
 						"type":        "string",
-						"description": "ID of the new fact that replaces the invalidated one. Required for invalidate action.",
+						"description": "ID of the new fact that replaces the invalidated one. Optional — if omitted, the fact is simply marked invalid without a replacement chain.",
 					},
 					"new_value": map[string]any{
 						"type":        "string",

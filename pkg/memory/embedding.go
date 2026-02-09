@@ -128,11 +128,17 @@ func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, text string) ([]fl
 }
 
 func (m *MockEmbeddingProvider) generateDeterministic(text string) []float32 {
-	hash := hashString(text)
+	// Use word-level hashing so texts sharing words produce similar vectors.
+	// This makes the mock behave more like a real embedding model where
+	// "Go concurrency" and "Rust concurrency" are closer than "cooking pasta".
 	embedding := make([]float32, m.dimension)
-	for i := 0; i < m.dimension; i++ {
-		val := float32((hash+uint64(i)*7919)%10000) / 10000.0 //nolint:gosec
-		embedding[i] = val*2.0 - 1.0
+	words := strings.Fields(strings.ToLower(text))
+	for _, word := range words {
+		wordHash := hashString(word)
+		for i := 0; i < m.dimension; i++ {
+			val := float32((wordHash+uint64(i)*7919)%10000) / 10000.0 //nolint:gosec
+			embedding[i] += val*2.0 - 1.0
+		}
 	}
 	return normalizeEmbedding(embedding)
 }

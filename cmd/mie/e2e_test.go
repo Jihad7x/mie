@@ -146,7 +146,7 @@ func TestMCPInitialize(t *testing.T) {
 	serverInfo, ok := result["serverInfo"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "mie", serverInfo["name"])
-	assert.Equal(t, "0.1.9", serverInfo["version"])
+	assert.Equal(t, "0.2.0", serverInfo["version"])
 
 	caps, ok := result["capabilities"].(map[string]any)
 	require.True(t, ok)
@@ -169,7 +169,7 @@ func TestMCPToolsList(t *testing.T) {
 
 	toolsList, ok := result["tools"].([]any)
 	require.True(t, ok)
-	assert.Len(t, toolsList, 11)
+	assert.Len(t, toolsList, 12)
 
 	expectedNames := map[string]bool{
 		"mie_analyze":    false,
@@ -183,6 +183,7 @@ func TestMCPToolsList(t *testing.T) {
 		"mie_conflicts":  false,
 		"mie_export":     false,
 		"mie_status":     false,
+		"mie_repair":     false,
 	}
 
 	for _, tool := range toolsList {
@@ -493,7 +494,7 @@ func TestMCPStoreMultipleTypes(t *testing.T) {
 		"type":         "decision",
 		"title":        "Use Go for the backend",
 		"rationale":    "Performance and simplicity",
-		"alternatives": "Rust, Python",
+		"alternatives": `["Rust", "Python"]`,
 		"source_agent": "test",
 	})
 	assert.Nil(t, resp["error"])
