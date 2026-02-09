@@ -255,6 +255,13 @@ func (w *Writer) InvalidateFact(ctx context.Context, oldFactID, newFactID, reaso
 		return fmt.Errorf("both node_id and replacement_id are required for fact invalidation")
 	}
 
+	// Verify the old fact exists before attempting invalidation.
+	check := fmt.Sprintf(`?[id] := *mie_fact { id }, id = '%s'`, escapeDatalog(oldFactID))
+	result, err := w.backend.Query(ctx, check)
+	if err != nil || len(result.Rows) == 0 {
+		return fmt.Errorf("fact %q not found", oldFactID)
+	}
+
 	now := time.Now().Unix()
 
 	// Mark the old fact as invalid by reading its current data and updating
@@ -288,6 +295,17 @@ func (w *Writer) AddRelationship(ctx context.Context, edgeType string, fields ma
 	schema, ok := ValidEdgeTables[edgeType]
 	if !ok {
 		return fmt.Errorf("unknown edge type: %s", edgeType)
+	}
+
+	// Validate ID prefixes match expected node types for this edge.
+	if prefixes, ok := validEdgeNodeTypes[edgeType]; ok && len(schema.Keys) >= 2 {
+		for i, key := range schema.Keys[:2] {
+			if val, exists := fields[key]; exists {
+				if !strings.HasPrefix(val, prefixes[i]) {
+					return fmt.Errorf("invalid ID %q for field %q of edge %s: expected prefix %q", val, key, edgeType, prefixes[i])
+				}
+			}
+		}
 	}
 
 	// Build column values from all columns (keys + values).
@@ -543,7 +561,9 @@ func (w *Writer) DeleteNode(ctx context.Context, nodeID string) error {
 	}
 
 	// Cascade-delete all edges referencing this node.
-	w.cascadeDeleteEdges(ctx, nodeType, nodeID)
+	if err := w.cascadeDeleteEdges(ctx, nodeType, nodeID); err != nil {
+		return fmt.Errorf("cascade delete edges for %s: %w", nodeID, err)
+	}
 
 	return nil
 }
@@ -597,7 +617,7 @@ func embeddingTableForType(nodeType string) (table, col string) {
 }
 
 // cascadeDeleteEdges removes all edges that reference the given node.
-func (w *Writer) cascadeDeleteEdges(ctx context.Context, nodeType, nodeID string) {
+func (w *Writer) cascadeDeleteEdges(ctx context.Context, nodeType, nodeID string) error {
 	escaped := escapeDatalog(nodeID)
 
 	// Map of edge table → column that might reference this node type.
@@ -635,6 +655,7 @@ func (w *Writer) cascadeDeleteEdges(ctx context.Context, nodeType, nodeID string
 		}
 	}
 
+	var errs []string
 	for _, edge := range edgesToClean {
 		schema, ok := ValidEdgeTables[edge.table]
 		if !ok || len(schema.Keys) < 2 {
@@ -648,8 +669,13 @@ func (w *Writer) cascadeDeleteEdges(ctx context.Context, nodeType, nodeID string
 			keyColList, edge.table, allColList, edge.col, escaped, edge.table, keyColList)
 		if err := w.backend.Execute(ctx, script); err != nil {
 			w.logger.Warn("cascade delete edge failed", "table", edge.table, "node_id", nodeID, "error", err)
+			errs = append(errs, fmt.Sprintf("%s.%s: %v", edge.table, edge.col, err))
 		}
 	}
+	if len(errs) > 0 {
+		return fmt.Errorf("cascade delete errors: %s", strings.Join(errs, "; "))
+	}
+	return nil
 }
 
 // detectNodeType determines the type of a node by its ID prefix or by querying tables.

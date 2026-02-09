@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -159,6 +160,75 @@ func (c *Client) BackfillEmbeddings(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	return c.writer.BackfillEmbeddings(ctx)
+}
+
+// CleanOrphanedEdges removes edges whose endpoint nodes no longer exist.
+// Returns the number of orphaned edges removed.
+func (c *Client) CleanOrphanedEdges(ctx context.Context) (int, error) {
+	cleaned := 0
+
+	// Map each edge table to its key columns and the node tables they reference.
+	type edgeCheck struct {
+		table     string
+		col       string
+		nodeTable string
+	}
+	checks := []edgeCheck{
+		{"mie_fact_entity", "fact_id", "mie_fact"},
+		{"mie_fact_entity", "entity_id", "mie_entity"},
+		{"mie_fact_topic", "fact_id", "mie_fact"},
+		{"mie_fact_topic", "topic_id", "mie_topic"},
+		{"mie_decision_topic", "decision_id", "mie_decision"},
+		{"mie_decision_topic", "topic_id", "mie_topic"},
+		{"mie_decision_entity", "decision_id", "mie_decision"},
+		{"mie_decision_entity", "entity_id", "mie_entity"},
+		{"mie_event_decision", "event_id", "mie_event"},
+		{"mie_event_decision", "decision_id", "mie_decision"},
+		{"mie_entity_topic", "entity_id", "mie_entity"},
+		{"mie_entity_topic", "topic_id", "mie_topic"},
+		{"mie_invalidates", "new_fact_id", "mie_fact"},
+		{"mie_invalidates", "old_fact_id", "mie_fact"},
+	}
+
+	for _, chk := range checks {
+		schema, ok := ValidEdgeTables[chk.table]
+		if !ok {
+			continue
+		}
+		keyColList := strings.Join(schema.Keys, ", ")
+
+		// Find edges where the referenced node doesn't exist.
+		query := fmt.Sprintf(
+			`?[%s] := *%s { %s }, not *%s { id: %s }`,
+			keyColList, chk.table, strings.Join(schema.AllColumns(), ", "),
+			chk.nodeTable, chk.col,
+		)
+		result, err := c.backend.Query(ctx, query)
+		if err != nil {
+			c.logger.Warn("orphan edge query failed", "table", chk.table, "col", chk.col, "error", err)
+			continue
+		}
+		if len(result.Rows) == 0 {
+			continue
+		}
+
+		// Delete each orphaned edge row.
+		for _, row := range result.Rows {
+			var vals []string
+			for i := range schema.Keys {
+				vals = append(vals, fmt.Sprintf("'%s'", escapeDatalog(toString(row[i]))))
+			}
+			rmScript := fmt.Sprintf(`?[%s] <- [[%s]] :rm %s { %s }`,
+				keyColList, strings.Join(vals, ", "), chk.table, keyColList)
+			if err := c.backend.Execute(ctx, rmScript); err != nil {
+				c.logger.Warn("orphan edge delete failed", "table", chk.table, "error", err)
+				continue
+			}
+			cleaned++
+		}
+	}
+
+	return cleaned, nil
 }
 
 // EmbeddingsEnabled reports whether embedding support is configured.

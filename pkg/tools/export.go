@@ -45,7 +45,7 @@ func Export(ctx context.Context, client Querier, args map[string]any) (*ToolResu
 	}
 
 	if includeEmbeddings {
-		result.Text += "\n\nNote: Embedding vectors are not included in export. Use mie_repair to rebuild indexes after import."
+		result.Text += "\n\nNote: Embedding vectors included. Use mie_repair to rebuild HNSW indexes after import."
 	}
 
 	return result, nil
@@ -131,18 +131,28 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 			switch typedRows := rows.(type) {
 			case []map[string]string:
 				for _, row := range typedRows {
+					keys := make([]string, 0, len(row))
+					for k := range row {
+						keys = append(keys, k)
+					}
+					sort.Strings(keys)
 					var parts []string
-					for k, v := range row {
-						parts = append(parts, fmt.Sprintf("%s: '%s'", k, escapeForDatalog(v)))
+					for _, k := range keys {
+						parts = append(parts, fmt.Sprintf("%s: '%s'", k, escapeForDatalog(row[k])))
 					}
 					sb.WriteString(fmt.Sprintf(":put %s { %s }\n", tableName, strings.Join(parts, ", ")))
 				}
 			case []any:
 				for _, item := range typedRows {
 					if row, ok := item.(map[string]any); ok {
+						keys := make([]string, 0, len(row))
+						for k := range row {
+							keys = append(keys, k)
+						}
+						sort.Strings(keys)
 						var parts []string
-						for k, v := range row {
-							parts = append(parts, fmt.Sprintf("%s: '%s'", k, escapeForDatalog(fmt.Sprint(v))))
+						for _, k := range keys {
+							parts = append(parts, fmt.Sprintf("%s: '%s'", k, escapeForDatalog(fmt.Sprint(row[k]))))
 						}
 						sb.WriteString(fmt.Sprintf(":put %s { %s }\n", tableName, strings.Join(parts, ", ")))
 					}

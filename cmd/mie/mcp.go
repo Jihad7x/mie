@@ -1083,6 +1083,7 @@ func handleRepair(ctx context.Context, s *mcpServer, _ map[string]any) (*tools.T
 	type repairer interface {
 		RepairHNSWIndexes() error
 		BackfillEmbeddings(ctx context.Context) (int, error)
+		CleanOrphanedEdges(ctx context.Context) (int, error)
 	}
 	r, ok := s.client.(repairer)
 	if !ok {
@@ -1107,6 +1108,16 @@ func handleRepair(ctx context.Context, s *mcpServer, _ map[string]any) (*tools.T
 
 	if backfilled == 0 {
 		sb.WriteString("\nNo missing embeddings found.")
+	}
+
+	// Step 3: Clean orphaned edges
+	orphaned, err := r.CleanOrphanedEdges(ctx)
+	if err != nil {
+		sb.WriteString(fmt.Sprintf("\nWarning: orphaned edge cleanup failed: %v", err))
+	} else if orphaned > 0 {
+		sb.WriteString(fmt.Sprintf("\nCleaned %d orphaned edges.", orphaned))
+	} else {
+		sb.WriteString("\nNo orphaned edges found.")
 	}
 
 	return tools.NewResult(sb.String()), nil

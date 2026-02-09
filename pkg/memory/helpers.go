@@ -60,6 +60,18 @@ func (e EdgeTableSchema) AllColumns() []string {
 	return all
 }
 
+// validEdgeNodeTypes maps edge table names to expected ID prefix pairs [source, target].
+// Used by Writer.AddRelationship for defense-in-depth validation.
+var validEdgeNodeTypes = map[string][2]string{
+	"mie_fact_entity":     {"fact:", "ent:"},
+	"mie_fact_topic":      {"fact:", "top:"},
+	"mie_decision_topic":  {"dec:", "top:"},
+	"mie_decision_entity": {"dec:", "ent:"},
+	"mie_event_decision":  {"evt:", "dec:"},
+	"mie_entity_topic":    {"ent:", "top:"},
+	"mie_invalidates":     {"fact:", "fact:"},
+}
+
 // ValidEdgeTables maps edge table names to their key and value columns.
 var ValidEdgeTables = map[string]EdgeTableSchema{
 	"mie_invalidates":     {Keys: []string{"new_fact_id", "old_fact_id"}, Values: []string{"reason"}},
