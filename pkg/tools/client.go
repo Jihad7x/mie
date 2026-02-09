@@ -52,6 +52,7 @@ type Querier interface {
 
 	// Metrics
 	IncrementCounter(ctx context.Context, key string) error
+	IncrementCounterBy(ctx context.Context, key string, n int) error
 
 	// Configuration
 	EmbeddingsEnabled() bool
@@ -181,28 +182,28 @@ type Invalidation struct {
 
 // SearchResult represents a single result from semantic or exact search.
 type SearchResult struct {
-	NodeType string      `json:"node_type"`
-	ID       string      `json:"id"`
-	Content  string      `json:"content"`
-	Detail   string      `json:"detail"`
-	Distance float64     `json:"distance"`
-	Metadata any `json:"metadata"`
+	NodeType string  `json:"node_type"`
+	ID       string  `json:"id"`
+	Content  string  `json:"content"`
+	Detail   string  `json:"detail"`
+	Distance float64 `json:"distance"`
+	Metadata any     `json:"metadata"`
 }
 
 // ListOptions configures listing of nodes.
 type ListOptions struct {
-	NodeType     string `json:"node_type"`
-	Category     string `json:"category"`
-	Kind         string `json:"kind"`
-	Status       string `json:"status"`
-	TopicName    string `json:"topic_name"`
-	ValidOnly    bool   `json:"valid_only"`
-	CreatedAfter int64  `json:"created_after"`
-	CreatedBefore int64 `json:"created_before"`
-	Limit        int    `json:"limit"`
-	Offset       int    `json:"offset"`
-	SortBy       string `json:"sort_by"`
-	SortOrder    string `json:"sort_order"`
+	NodeType      string `json:"node_type"`
+	Category      string `json:"category"`
+	Kind          string `json:"kind"`
+	Status        string `json:"status"`
+	TopicName     string `json:"topic_name"`
+	ValidOnly     bool   `json:"valid_only"`
+	CreatedAfter  int64  `json:"created_after"`
+	CreatedBefore int64  `json:"created_before"`
+	Limit         int    `json:"limit"`
+	Offset        int    `json:"offset"`
+	SortBy        string `json:"sort_by"`
+	SortOrder     string `json:"sort_order"`
 }
 
 // --- Conflict types ---
@@ -225,22 +226,28 @@ type ConflictOptions struct {
 
 // GraphStats contains memory graph statistics.
 type GraphStats struct {
-	TotalFacts       int    `json:"total_facts"`
-	ValidFacts       int    `json:"valid_facts"`
-	InvalidatedFacts int    `json:"invalidated_facts"`
-	TotalDecisions   int    `json:"total_decisions"`
-	ActiveDecisions  int    `json:"active_decisions"`
-	TotalEntities    int    `json:"total_entities"`
-	TotalEvents      int    `json:"total_events"`
-	TotalTopics      int    `json:"total_topics"`
-	TotalEdges       int    `json:"total_edges"`
-	TotalQueries     int    `json:"total_queries"`
-	TotalStores      int    `json:"total_stores"`
-	LastQueryAt      int64  `json:"last_query_at,omitempty"`
-	LastStoreAt      int64  `json:"last_store_at,omitempty"`
-	SchemaVersion    string `json:"schema_version"`
-	StorageEngine    string `json:"storage_engine"`
-	StoragePath      string `json:"storage_path"`
+	TotalFacts          int    `json:"total_facts"`
+	ValidFacts          int    `json:"valid_facts"`
+	InvalidatedFacts    int    `json:"invalidated_facts"`
+	TotalDecisions      int    `json:"total_decisions"`
+	ActiveDecisions     int    `json:"active_decisions"`
+	SupersededDecisions int    `json:"superseded_decisions"`
+	ReversedDecisions   int    `json:"reversed_decisions"`
+	TotalEntities       int    `json:"total_entities"`
+	TotalEvents         int    `json:"total_events"`
+	TotalTopics         int    `json:"total_topics"`
+	TotalEdges          int    `json:"total_edges"`
+	FactEmbeddings      int    `json:"fact_embeddings"`
+	DecisionEmbeddings  int    `json:"decision_embeddings"`
+	EntityEmbeddings    int    `json:"entity_embeddings"`
+	EventEmbeddings     int    `json:"event_embeddings"`
+	TotalQueries        int    `json:"total_queries"`
+	TotalStores         int    `json:"total_stores"`
+	LastQueryAt         int64  `json:"last_query_at,omitempty"`
+	LastStoreAt         int64  `json:"last_store_at,omitempty"`
+	SchemaVersion       string `json:"schema_version"`
+	StorageEngine       string `json:"storage_engine"`
+	StoragePath         string `json:"storage_path"`
 }
 
 // ExportOptions configures graph export.
@@ -252,13 +259,13 @@ type ExportOptions struct {
 
 // ExportData contains the full graph export.
 type ExportData struct {
-	Version    string                 `json:"version"`
-	ExportedAt string                 `json:"exported_at"`
-	Stats      map[string]int         `json:"stats"`
-	Facts      []Fact                 `json:"facts,omitempty"`
-	Decisions  []Decision             `json:"decisions,omitempty"`
-	Entities   []Entity               `json:"entities,omitempty"`
-	Events     []Event                `json:"events,omitempty"`
-	Topics     []Topic                `json:"topics,omitempty"`
+	Version    string         `json:"version"`
+	ExportedAt string         `json:"exported_at"`
+	Stats      map[string]int `json:"stats"`
+	Facts      []Fact         `json:"facts,omitempty"`
+	Decisions  []Decision     `json:"decisions,omitempty"`
+	Entities   []Entity       `json:"entities,omitempty"`
+	Events     []Event        `json:"events,omitempty"`
+	Topics     []Topic        `json:"topics,omitempty"`
 	Edges      map[string]any `json:"relationships,omitempty"`
 }

@@ -818,9 +818,15 @@ func (r *Reader) GetStats(ctx context.Context) (*tools.GraphStats, error) {
 		{`?[count(id)] := *mie_fact { id, valid }, valid = false`, &stats.InvalidatedFacts},
 		{`?[count(id)] := *mie_decision { id }`, &stats.TotalDecisions},
 		{`?[count(id)] := *mie_decision { id, status }, status = 'active'`, &stats.ActiveDecisions},
+		{`?[count(id)] := *mie_decision { id, status }, status = 'superseded'`, &stats.SupersededDecisions},
+		{`?[count(id)] := *mie_decision { id, status }, status = 'reversed'`, &stats.ReversedDecisions},
 		{`?[count(id)] := *mie_entity { id }`, &stats.TotalEntities},
 		{`?[count(id)] := *mie_event { id }`, &stats.TotalEvents},
 		{`?[count(id)] := *mie_topic { id }`, &stats.TotalTopics},
+		{`?[count(fact_id)] := *mie_fact_embedding { fact_id }`, &stats.FactEmbeddings},
+		{`?[count(decision_id)] := *mie_decision_embedding { decision_id }`, &stats.DecisionEmbeddings},
+		{`?[count(entity_id)] := *mie_entity_embedding { entity_id }`, &stats.EntityEmbeddings},
+		{`?[count(event_id)] := *mie_event_embedding { event_id }`, &stats.EventEmbeddings},
 	}
 
 	for _, q := range queries {

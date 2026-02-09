@@ -42,9 +42,7 @@ func BulkStore(ctx context.Context, client Querier, args map[string]any) (*ToolR
 	for _, c := range typeCounts {
 		totalStored += c
 	}
-	for range totalStored {
-		_ = client.IncrementCounter(ctx, "total_stores")
-	}
+	_ = client.IncrementCounterBy(ctx, "total_stores", totalStored)
 
 	return NewResult(bulkFormatOutput(stored, typeCounts, totalStored, relMessages, errors)), nil
 }
@@ -172,6 +170,17 @@ func resolveBatchRefs(rels any, stored []bulkItem, errs *[]string, itemIdx int) 
 			if stored[idx].nodeID == "" {
 				*errs = append(*errs, fmt.Sprintf("item[%d]: target_ref %d references a failed item", itemIdx, idx))
 				continue
+			}
+			// Validate edge/target type compatibility.
+			edge := ""
+			if e, ok := relMap["edge"].(string); ok {
+				edge = e
+			}
+			if endpoints, ok := validEdgeEndpoints[edge]; ok {
+				if !strings.HasPrefix(stored[idx].nodeID, endpoints[1]) {
+					*errs = append(*errs, fmt.Sprintf("item[%d]: target_ref %d resolves to [%s] but edge %q requires target prefix %q", itemIdx, idx, stored[idx].nodeID, edge, endpoints[1]))
+					continue
+				}
 			}
 			// Copy the map and replace target_ref with the resolved target_id.
 			resolved = append(resolved, map[string]any{
