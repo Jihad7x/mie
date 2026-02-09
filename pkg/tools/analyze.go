@@ -35,11 +35,20 @@ func Analyze(ctx context.Context, client Querier, args map[string]any) (*ToolRes
 		}
 	}
 
+	// Filter out invalidated facts from results.
+	filtered := make([]SearchResult, 0, len(results))
+	for _, r := range results {
+		if f, ok := r.Metadata.(*Fact); ok && !f.Valid {
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+	results = filtered
+
 	// Check for potential conflicts
 	conflicts, err := client.CheckNewFactConflicts(ctx, content, "")
 	if err != nil {
-		// Non-fatal: continue without conflict info
-		_ = err
+		fmt.Fprintf(&sb, "_Note: Conflict check failed: %v_\n\n", err)
 	}
 
 	// Build response
@@ -96,7 +105,7 @@ func formatAnalyzeResults(sb *strings.Builder, results []SearchResult) {
 	}
 
 	typeOrder := []string{"fact", "decision", "entity", "event"}
-	typeLabels := map[string]string{
+	analyzeLabels := map[string]string{
 		"fact":     "Related Facts",
 		"decision": "Related Decisions",
 		"entity":   "Related Entities",
@@ -108,7 +117,7 @@ func formatAnalyzeResults(sb *strings.Builder, results []SearchResult) {
 		if !ok || len(items) == 0 {
 			continue
 		}
-		fmt.Fprintf(sb, "### %s (%d found)\n", typeLabels[nt], len(items))
+		fmt.Fprintf(sb, "### %s (%d found)\n", analyzeLabels[nt], len(items))
 		for _, item := range items {
 			pct := SimilarityPercent(item.Distance)
 			indicator := SimilarityIndicator(item.Distance)

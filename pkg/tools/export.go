@@ -31,14 +31,24 @@ func Export(ctx context.Context, client Querier, args map[string]any) (*ToolResu
 		return NewError(fmt.Sprintf("Failed to export graph: %v", err)), nil
 	}
 
+	var result *ToolResult
 	switch format {
 	case "json":
-		return exportJSON(data)
+		result, err = exportJSON(data)
 	case "datalog":
-		return exportDatalog(data)
+		result, err = exportDatalog(data)
 	default:
 		return NewError("Unsupported format"), nil
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	if includeEmbeddings {
+		result.Text += "\n\nNote: Embedding vectors are not included in export. Use mie_repair to rebuild indexes after import."
+	}
+
+	return result, nil
 }
 
 func exportJSON(data *ExportData) (*ToolResult, error) {
@@ -133,6 +143,7 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 						var parts []string
 						for k, v := range row {
 							parts = append(parts, fmt.Sprintf("%s: '%s'", k, escapeForDatalog(fmt.Sprint(v))))
+						}
 						sb.WriteString(fmt.Sprintf(":put %s { %s }\n", tableName, strings.Join(parts, ", ")))
 					}
 				}

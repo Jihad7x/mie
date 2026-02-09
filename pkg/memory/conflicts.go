@@ -153,7 +153,7 @@ func (cd *ConflictDetector) DetectConflicts(ctx context.Context, opts tools.Conf
 			})
 		}
 
-		if len(conflicts) >= limit {
+		if len(conflicts) >= limit*10 {
 			break
 		}
 	}

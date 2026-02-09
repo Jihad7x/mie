@@ -19,7 +19,7 @@ func TestAnalyze_WithRelatedNodes(t *testing.T) {
 					ID:       "fact:abc123",
 					Content:  "User works at Kraklabs",
 					Distance: 0.08,
-					Metadata: &Fact{ID: "fact:abc123", Content: "User works at Kraklabs", Confidence: 0.95, Category: "professional"},
+					Metadata: &Fact{ID: "fact:abc123", Content: "User works at Kraklabs", Confidence: 0.95, Category: "professional", Valid: true},
 				},
 				{
 					NodeType: "entity",

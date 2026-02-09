@@ -10,6 +10,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/kraklabs/mie/pkg/storage"
@@ -18,9 +20,10 @@ import (
 
 // Writer handles all mutations to the memory graph.
 type Writer struct {
-	backend  storage.Backend
-	embedder *EmbeddingGenerator
-	logger   *slog.Logger
+	backend     storage.Backend
+	embedder    *EmbeddingGenerator
+	logger      *slog.Logger
+	embeddingWg sync.WaitGroup
 }
 
 // NewWriter creates a new Writer.
@@ -69,6 +72,7 @@ func (w *Writer) StoreFact(ctx context.Context, req tools.StoreFactRequest) (*to
 	}
 
 	if w.embedder != nil {
+		w.embeddingWg.Add(1)
 		go w.storeEmbeddingAsync("mie_fact_embedding", "fact_id", fact.ID, fact.Content)
 	}
 
@@ -112,6 +116,7 @@ func (w *Writer) StoreDecision(ctx context.Context, req tools.StoreDecisionReque
 	}
 
 	if w.embedder != nil {
+		w.embeddingWg.Add(1)
 		text := decision.Title + ". " + decision.Rationale
 		go w.storeEmbeddingAsync("mie_decision_embedding", "decision_id", decision.ID, text)
 	}
@@ -131,13 +136,24 @@ func (w *Writer) StoreEntity(ctx context.Context, req tools.StoreEntityRequest) 
 	id := EntityID(req.Name, req.Kind)
 	now := time.Now().Unix()
 
+	// Check if entity already exists to preserve created_at on upsert.
+	createdAt := now
+	checkScript := fmt.Sprintf(`?[created_at] := *mie_entity { id, created_at }, id = '%s'`, escapeDatalog(id))
+	if result, err := w.backend.Query(ctx, checkScript); err == nil && len(result.Rows) > 0 {
+		if ts, ok := result.Rows[0][0].(float64); ok {
+			createdAt = int64(ts)
+		} else if ts, ok := result.Rows[0][0].(int64); ok {
+			createdAt = ts
+		}
+	}
+
 	entity := &tools.Entity{
 		ID:          id,
 		Name:        req.Name,
 		Kind:        req.Kind,
 		Description: req.Description,
 		SourceAgent: req.SourceAgent,
-		CreatedAt:   now,
+		CreatedAt:   createdAt,
 		UpdatedAt:   now,
 	}
 
@@ -152,6 +168,7 @@ func (w *Writer) StoreEntity(ctx context.Context, req tools.StoreEntityRequest) 
 	}
 
 	if w.embedder != nil {
+		w.embeddingWg.Add(1)
 		text := entity.Name + ": " + entity.Description
 		go w.storeEmbeddingAsync("mie_entity_embedding", "entity_id", entity.ID, text)
 	}
@@ -163,6 +180,11 @@ func (w *Writer) StoreEntity(ctx context.Context, req tools.StoreEntityRequest) 
 func (w *Writer) StoreEvent(ctx context.Context, req tools.StoreEventRequest) (*tools.Event, error) {
 	if req.Title == "" {
 		return nil, fmt.Errorf("event title is required")
+	}
+	if req.EventDate != "" {
+		if _, err := time.Parse("2006-01-02", req.EventDate); err != nil {
+			return nil, fmt.Errorf("invalid event_date format %q: expected ISO date (YYYY-MM-DD)", req.EventDate)
+		}
 	}
 
 	id := EventID(req.Title, req.EventDate)
@@ -190,6 +212,7 @@ func (w *Writer) StoreEvent(ctx context.Context, req tools.StoreEventRequest) (*
 	}
 
 	if w.embedder != nil {
+		w.embeddingWg.Add(1)
 		text := event.Title + ". " + event.Description
 		go w.storeEmbeddingAsync("mie_event_embedding", "event_id", event.ID, text)
 	}
@@ -229,7 +252,7 @@ func (w *Writer) StoreTopic(ctx context.Context, req tools.StoreTopicRequest) (*
 // InvalidateFact marks a fact as invalid and records the invalidation edge.
 func (w *Writer) InvalidateFact(ctx context.Context, oldFactID, newFactID, reason string) error {
 	if oldFactID == "" || newFactID == "" {
-		return fmt.Errorf("both old and new fact IDs are required")
+		return fmt.Errorf("both node_id and replacement_id are required for fact invalidation")
 	}
 
 	now := time.Now().Unix()
@@ -302,6 +325,17 @@ func (w *Writer) UpdateDescription(ctx context.Context, nodeID, newDescription s
 		return err
 	}
 
+	// Verify the node actually exists in the database.
+	table := nodeTypeToTable(nodeType)
+	checkScript := fmt.Sprintf(`?[id] := *%s { id }, id = '%s'`, table, escapeDatalog(nodeID))
+	checkResult, err := w.backend.Query(ctx, checkScript)
+	if err != nil {
+		return fmt.Errorf("check node existence: %w", err)
+	}
+	if len(checkResult.Rows) == 0 {
+		return fmt.Errorf("node %q not found", nodeID)
+	}
+
 	now := time.Now().Unix()
 	var mutation string
 
@@ -353,6 +387,16 @@ func (w *Writer) UpdateStatus(ctx context.Context, nodeID, newStatus string) err
 		return fmt.Errorf("invalid status %q; must be one of: active, superseded, reversed", newStatus)
 	}
 
+	// Verify the decision exists before updating.
+	checkScript := fmt.Sprintf(`?[id] := *mie_decision { id }, id = '%s'`, escapeDatalog(nodeID))
+	checkResult, err := w.backend.Query(ctx, checkScript)
+	if err != nil {
+		return fmt.Errorf("check decision existence: %w", err)
+	}
+	if len(checkResult.Rows) == 0 {
+		return fmt.Errorf("decision %q not found", nodeID)
+	}
+
 	now := time.Now().Unix()
 
 	mutation := fmt.Sprintf(
@@ -372,8 +416,14 @@ func (w *Writer) UpdateStatus(ctx context.Context, nodeID, newStatus string) err
 	return nil
 }
 
+// WaitForEmbeddings blocks until all background embedding operations complete.
+func (w *Writer) WaitForEmbeddings() {
+	w.embeddingWg.Wait()
+}
+
 // storeEmbeddingAsync generates and stores an embedding in the background.
 func (w *Writer) storeEmbeddingAsync(table, idCol, nodeID, text string) {
+	defer w.embeddingWg.Done()
 	ctx := context.Background()
 	embedding, err := w.embedder.Generate(ctx, text)
 	if err != nil {
@@ -389,6 +439,83 @@ func (w *Writer) storeEmbeddingAsync(table, idCol, nodeID, text string) {
 	if err := w.backend.Execute(ctx, mutation); err != nil {
 		w.logger.Warn("failed to store embedding", "node_id", nodeID, "table", table, "error", err)
 	}
+}
+
+// BackfillEmbeddings generates embeddings for nodes that don't have them yet.
+// This handles nodes created before embeddings were enabled or when the
+// embedding provider was unavailable.
+func (w *Writer) BackfillEmbeddings(ctx context.Context) (int, error) {
+	if w.embedder == nil {
+		return 0, nil
+	}
+
+	type backfillItem struct {
+		table  string
+		idCol  string
+		nodeID string
+		text   string
+	}
+
+	var items []backfillItem
+
+	// Find facts without embeddings.
+	qr, err := w.backend.Query(ctx, `?[id, content] := *mie_fact{id, content}, not *mie_fact_embedding{fact_id: id}`)
+	if err == nil {
+		for _, row := range qr.Rows {
+			items = append(items, backfillItem{"mie_fact_embedding", "fact_id", toString(row[0]), toString(row[1])})
+		}
+	}
+
+	// Find decisions without embeddings.
+	qr, err = w.backend.Query(ctx, `?[id, title, rationale] := *mie_decision{id, title, rationale}, not *mie_decision_embedding{decision_id: id}`)
+	if err == nil {
+		for _, row := range qr.Rows {
+			items = append(items, backfillItem{"mie_decision_embedding", "decision_id", toString(row[0]), toString(row[1]) + ". " + toString(row[2])})
+		}
+	}
+
+	// Find entities without embeddings.
+	qr, err = w.backend.Query(ctx, `?[id, name, description] := *mie_entity{id, name, description}, not *mie_entity_embedding{entity_id: id}`)
+	if err == nil {
+		for _, row := range qr.Rows {
+			items = append(items, backfillItem{"mie_entity_embedding", "entity_id", toString(row[0]), toString(row[1]) + ": " + toString(row[2])})
+		}
+	}
+
+	// Find events without embeddings.
+	qr, err = w.backend.Query(ctx, `?[id, title, description] := *mie_event{id, title, description}, not *mie_event_embedding{event_id: id}`)
+	if err == nil {
+		for _, row := range qr.Rows {
+			items = append(items, backfillItem{"mie_event_embedding", "event_id", toString(row[0]), toString(row[1]) + ". " + toString(row[2])})
+		}
+	}
+
+	if len(items) == 0 {
+		return 0, nil
+	}
+
+	w.logger.Info("backfilling embeddings", "count", len(items))
+	filled := 0
+	for _, item := range items {
+		embedding, genErr := w.embedder.Generate(ctx, item.text)
+		if genErr != nil {
+			w.logger.Warn("backfill embedding failed", "node_id", item.nodeID, "error", genErr)
+			continue
+		}
+		vecStr := formatVector(embedding)
+		mutation := fmt.Sprintf(
+			`?[%s, embedding] <- [['%s', vec(%s)]] :put %s { %s => embedding }`,
+			item.idCol, escapeDatalog(item.nodeID), vecStr, item.table, item.idCol,
+		)
+		if execErr := w.backend.Execute(ctx, mutation); execErr != nil {
+			w.logger.Warn("backfill store failed", "node_id", item.nodeID, "error", execErr)
+			continue
+		}
+		filled++
+	}
+
+	w.logger.Info("backfill complete", "filled", filled, "total", len(items))
+	return filled, nil
 }
 
 // DeleteNode removes a node and all its associated edges and embeddings.
@@ -568,15 +695,4 @@ func (w *Writer) detectNodeType(ctx context.Context, nodeID string) (string, err
 	}
 
 	return "", fmt.Errorf("node %q not found", nodeID)
-}
-
-func joinStrings(ss []string, sep string) string {
-	result := ""
-	for i, s := range ss {
-		if i > 0 {
-			result += sep
-		}
-		result += s
-	}
-	return result
 }

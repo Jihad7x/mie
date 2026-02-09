@@ -6,6 +6,7 @@ package memory
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -108,6 +109,7 @@ func isValidEntityRole(role string) bool {
 
 // formatVector converts a float32 slice to CozoDB vec() format.
 // Example output: "[0.123000, -0.456000, 0.789000]"
+// NaN and Inf values are replaced with 0.0 to prevent invalid CozoDB queries.
 func formatVector(v []float32) string {
 	if len(v) == 0 {
 		return "[]"
@@ -118,7 +120,11 @@ func formatVector(v []float32) string {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(fmt.Sprintf("%f", f))
+		if math.IsNaN(float64(f)) || math.IsInf(float64(f), 0) {
+			sb.WriteString("0.000000")
+		} else {
+			sb.WriteString(fmt.Sprintf("%f", f))
+		}
 	}
 	sb.WriteString("]")
 	return sb.String()

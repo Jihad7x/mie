@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // GetStringArg extracts a string argument from the args map, returning defaultVal if missing.
@@ -167,12 +168,13 @@ func AnyToFloat64(v any) float64 {
 	}
 }
 
-// Truncate truncates a string to the specified length.
+// Truncate truncates a string to the specified rune length.
 func Truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	if utf8.RuneCountInString(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	runes := []rune(s)
+	return string(runes[:maxLen]) + "..."
 }
 
 // FormatRows formats query result rows for display.
@@ -219,6 +221,11 @@ func EscapeRegex(s string) string {
 		}
 	}
 	return string(result)
+}
+
+// TypeLabels maps node type keys to display labels.
+var TypeLabels = map[string]string{
+	"fact": "Facts", "decision": "Decisions", "entity": "Entities", "event": "Events", "topic": "Topics",
 }
 
 // QuoteCozoPattern wraps a pattern in CozoDB raw string notation.
