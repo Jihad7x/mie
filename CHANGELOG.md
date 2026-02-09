@@ -5,6 +5,44 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-09
+
+### Added
+
+- `mie_repair` tool: rebuilds HNSW indexes and cleans orphaned embeddings when semantic search encounters corruption
+- Embedding backfill: `BackfillEmbeddings` generates vectors for nodes created before embeddings were enabled
+- Semantic search result boosting: content containing the query text gets its distance halved
+- Semantic search quality filter: results with cosine distance > 0.6 (< 40% similarity) are excluded
+- Field length validation: content (50,000 chars), titles (500), descriptions (2,000), names (200)
+- `mie_bulk_store` pre-validation: validates all items (required fields, enums, JSON arrays, date formats) before storing any, ensuring atomic-or-nothing behavior
+- Entity upsert detection: `mie_store` now shows "Stored new entity" vs "Updated existing entity"
+- `topic` added to MCP schema `node_types` enum across all tools
+- Fact invalidation without replacement: `replacement_id` is now optional in `mie_update`; omitting it marks the fact invalid without creating a replacement chain
+- Edge existence check: `mie_delete remove_relationship` now verifies the edge exists before attempting removal
+- Invalidation target pre-validation: `mie_store` with `invalidates` verifies the target fact exists before storing the new fact
+- JSON validation for `alternatives` field in decisions (rejects non-JSON-array values)
+- Warning for empty `role` on `decision_entity` edges
+- Embedding coverage stats per node type in `mie_status` (e.g., "Facts: 47/49")
+- Decision status breakdown in `mie_status` (e.g., "9 active, 1 superseded")
+- Orphaned edge cleanup during node deletion
+
+### Fixed
+
+- **Datalog export syntax** (HIGH): now generates valid CozoDB `:put` format with proper key/value separation — previously produced unparseable output
+- **`mie_analyze` conflict display**: shows the existing fact (with ID) instead of the empty proposed fact
+- **`mie_query` filter pass-through**: `category`/`kind` filters no longer exclude Decision and Event types that don't have those fields
+- **Embedding deletion**: errors in `DeleteNode` now log warnings instead of being silently swallowed, preventing orphaned HNSW entries
+- **Async embedding timeout**: embedding generation now uses a 30-second timeout instead of unbounded `context.Background()`
+- **`mie_export` embeddings message**: only shown when actual embedding count > 0
+- **`MockEmbeddingProvider`**: uses word-level hashing so texts sharing words produce similar vectors, fixing `TestIntegrationSemanticSearch`
+
+### Changed
+
+- Edge schema refactored to support explicit key/value column separation for CozoDB `:put` syntax
+- Sorting and filtering logic improved in list and query operations with better error handling
+- CI workflow updated to golangci-lint-action v7
+- MCP server version bumped to 1.2.0
+
 ## [0.1.9] - 2026-02-08
 
 ### Fixed
@@ -134,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[1.2.0]: https://github.com/kraklabs/mie/compare/v0.1.9...v1.2.0
 [0.1.9]: https://github.com/kraklabs/mie/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kraklabs/mie/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/kraklabs/mie/compare/v0.1.6...v0.1.7

@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "0.2.0" // 14 bugfixes: atomicity, export syntax, filter pass-through, validation, HNSW safety
+	mcpVersion    = "1.2.0" // HNSW repair, semantic search boosting, bulk validation, 14 bugfixes, edge schema refactor
 	mcpServerName = "mie"
 )
 

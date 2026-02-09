@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-MIE exposes 11 tools through the [Model Context Protocol](https://modelcontextprotocol.io/). AI agents call these tools to read, write, and search the memory graph.
+MIE exposes 12 tools through the [Model Context Protocol](https://modelcontextprotocol.io/). AI agents call these tools to read, write, and search the memory graph.
 
 All tools are invoked via `tools/call` JSON-RPC requests. Each tool returns a text response in `content[0].text`.
 
@@ -417,7 +417,7 @@ Update or invalidate existing memory nodes.
 | `node_id` | string | Yes | -- | ID of the node to modify. |
 | `action` | string | Yes | -- | Action: `invalidate`, `update_description`, or `update_status`. |
 | `reason` | string | Conditional | -- | Why the change is being made. **Required for `invalidate`.** |
-| `replacement_id` | string | No | -- | ID of the new fact that replaces the invalidated one (must start with `fact:`). |
+| `replacement_id` | string | No | -- | ID of the new fact that replaces the invalidated one (must start with `fact:`). If omitted, the fact is simply marked invalid without a replacement chain. |
 | `new_value` | string | Conditional | -- | New description or status value. **Required for `update_description` and `update_status`.** |
 
 ### Actions
@@ -700,3 +700,54 @@ None.
 ### Common use case
 
 Call `mie_status` as a first step when starting a new session to verify MIE is operational and see how much memory is stored.
+
+---
+
+## mie_repair
+
+Rebuild HNSW indexes and clean orphaned embeddings. Use this when semantic search returns errors about missing compound keys or corrupted indexes.
+
+**When to use:** After encountering HNSW errors like "Cannot find compound key" in `mie_query` or `mie_analyze` output.
+
+### Parameters
+
+None.
+
+### Example request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 16,
+  "method": "tools/call",
+  "params": {
+    "name": "mie_repair",
+    "arguments": {}
+  }
+}
+```
+
+### Example response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 16,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "HNSW indexes rebuilt successfully.\nNo missing embeddings found.\nNo orphaned edges found."
+      }
+    ]
+  }
+}
+```
+
+### Behavior
+
+1. Drops all HNSW indexes (fact, decision, entity, event embedding indexes).
+2. Removes orphaned embedding rows (embeddings whose parent node no longer exists).
+3. Recreates HNSW indexes from the clean embedding data.
+4. Runs embedding backfill to generate embeddings for nodes that don't have them.
+5. Validates edge consistency and removes orphaned edges.
