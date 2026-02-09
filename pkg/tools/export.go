@@ -97,120 +97,15 @@ func exportJSON(data *ExportData) (*ToolResult, error) {
 
 func exportDatalog(data *ExportData) (*ToolResult, error) {
 	var sb strings.Builder
-	totalNodes := 0
 	sb.WriteString("// MIE Memory Export (Datalog format)\n")
 	sb.WriteString(fmt.Sprintf("// Exported: %s\n\n", data.ExportedAt))
 
-	// Export facts
-	// Schema: mie_fact { id => content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at }
-	if data.Facts != nil {
-		for _, f := range data.Facts {
-			sb.WriteString(fmt.Sprintf("?[id, content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at] <- [['%s', '%s', '%s', %g, '%s', '%s', %s, %d, %d]] :put mie_fact { id => content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at }\n",
-				escapeForDatalog(f.ID), escapeForDatalog(f.Content), escapeForDatalog(f.Category), f.Confidence, escapeForDatalog(f.SourceAgent), escapeForDatalog(f.SourceConversation), boolToDatalog(f.Valid), f.CreatedAt, f.UpdatedAt))
-		}
-		totalNodes += len(data.Facts)
-		sb.WriteString("\n")
-	}
-
-	// Export decisions
-	// Schema: mie_decision { id => title, rationale, alternatives, context, source_agent, source_conversation, status, created_at, updated_at }
-	if data.Decisions != nil {
-		for _, d := range data.Decisions {
-			sb.WriteString(fmt.Sprintf("?[id, title, rationale, alternatives, context, source_agent, source_conversation, status, created_at, updated_at] <- [['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d]] :put mie_decision { id => title, rationale, alternatives, context, source_agent, source_conversation, status, created_at, updated_at }\n",
-				escapeForDatalog(d.ID), escapeForDatalog(d.Title), escapeForDatalog(d.Rationale), escapeForDatalog(d.Alternatives), escapeForDatalog(d.Context), escapeForDatalog(d.SourceAgent), escapeForDatalog(d.SourceConversation), escapeForDatalog(d.Status), d.CreatedAt, d.UpdatedAt))
-		}
-		totalNodes += len(data.Decisions)
-		sb.WriteString("\n")
-	}
-
-	// Export entities
-	// Schema: mie_entity { id => name, kind, description, source_agent, created_at, updated_at }
-	if data.Entities != nil {
-		for _, e := range data.Entities {
-			sb.WriteString(fmt.Sprintf("?[id, name, kind, description, source_agent, created_at, updated_at] <- [['%s', '%s', '%s', '%s', '%s', %d, %d]] :put mie_entity { id => name, kind, description, source_agent, created_at, updated_at }\n",
-				escapeForDatalog(e.ID), escapeForDatalog(e.Name), escapeForDatalog(e.Kind), escapeForDatalog(e.Description), escapeForDatalog(e.SourceAgent), e.CreatedAt, e.UpdatedAt))
-		}
-		totalNodes += len(data.Entities)
-		sb.WriteString("\n")
-	}
-
-	// Export events
-	// Schema: mie_event { id => title, description, event_date, source_agent, source_conversation, created_at, updated_at }
-	if data.Events != nil {
-		for _, ev := range data.Events {
-			sb.WriteString(fmt.Sprintf("?[id, title, description, event_date, source_agent, source_conversation, created_at, updated_at] <- [['%s', '%s', '%s', '%s', '%s', '%s', %d, %d]] :put mie_event { id => title, description, event_date, source_agent, source_conversation, created_at, updated_at }\n",
-				escapeForDatalog(ev.ID), escapeForDatalog(ev.Title), escapeForDatalog(ev.Description), escapeForDatalog(ev.EventDate), escapeForDatalog(ev.SourceAgent), escapeForDatalog(ev.SourceConversation), ev.CreatedAt, ev.UpdatedAt))
-		}
-		totalNodes += len(data.Events)
-		sb.WriteString("\n")
-	}
-
-	// Export topics
-	// Schema: mie_topic { id => name, description, created_at, updated_at }
-	if data.Topics != nil {
-		for _, t := range data.Topics {
-			sb.WriteString(fmt.Sprintf("?[id, name, description, created_at, updated_at] <- [['%s', '%s', '%s', %d, %d]] :put mie_topic { id => name, description, created_at, updated_at }\n",
-				escapeForDatalog(t.ID), escapeForDatalog(t.Name), escapeForDatalog(t.Description), t.CreatedAt, t.UpdatedAt))
-		}
-		totalNodes += len(data.Topics)
-		sb.WriteString("\n")
-	}
-
-	// Export relationships using ValidEdgeTables schema for proper key/value separation.
-	if data.Edges != nil {
-		for edgeName, rows := range data.Edges {
-			tableName := "mie_" + edgeName
-			schema, hasSchema := exportEdgeTables[tableName]
-			if !hasSchema {
-				continue
-			}
-			allCols := schema.allColumns()
-			keyCols := schema.Keys
-			var valueCols []string
-			if len(schema.Values) > 0 {
-				valueCols = schema.Values
-			}
-
-			putSuffix := strings.Join(keyCols, ", ")
-			if len(valueCols) > 0 {
-				putSuffix += " => " + strings.Join(valueCols, ", ")
-			}
-
-			writeEdgeRow := func(rowData map[string]string) {
-				var colNames []string
-				var colValues []string
-				for _, col := range allCols {
-					colNames = append(colNames, col)
-					colValues = append(colValues, fmt.Sprintf("'%s'", escapeForDatalog(rowData[col])))
-				}
-				sb.WriteString(fmt.Sprintf("?[%s] <- [[%s]] :put %s { %s }\n",
-					strings.Join(colNames, ", "),
-					strings.Join(colValues, ", "),
-					tableName,
-					putSuffix))
-			}
-
-			switch typedRows := rows.(type) {
-			case []map[string]string:
-				for _, row := range typedRows {
-					writeEdgeRow(row)
-				}
-			case []any:
-				for _, item := range typedRows {
-					if row, ok := item.(map[string]any); ok {
-						strRow := make(map[string]string, len(row))
-						for k, v := range row {
-							strRow[k] = fmt.Sprint(v)
-						}
-						writeEdgeRow(strRow)
-					}
-				}
-			default:
-				continue
-			}
-			sb.WriteString("\n")
-		}
-	}
+	totalNodes := exportDatalogFacts(&sb, data.Facts)
+	totalNodes += exportDatalogDecisions(&sb, data.Decisions)
+	totalNodes += exportDatalogEntities(&sb, data.Entities)
+	totalNodes += exportDatalogEvents(&sb, data.Events)
+	totalNodes += exportDatalogTopics(&sb, data.Topics)
+	exportDatalogEdges(&sb, data.Edges)
 
 	output := sb.String()
 	if len(output) > 100000 {
@@ -218,6 +113,121 @@ func exportDatalog(data *ExportData) (*ToolResult, error) {
 	}
 
 	return NewResult(output), nil
+}
+
+func exportDatalogFacts(sb *strings.Builder, facts []Fact) int {
+	if facts == nil {
+		return 0
+	}
+	for _, f := range facts {
+		fmt.Fprintf(sb, "?[id, content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at] <- [['%s', '%s', '%s', %g, '%s', '%s', %s, %d, %d]] :put mie_fact { id => content, category, confidence, source_agent, source_conversation, valid, created_at, updated_at }\n",
+			escapeForDatalog(f.ID), escapeForDatalog(f.Content), escapeForDatalog(f.Category), f.Confidence, escapeForDatalog(f.SourceAgent), escapeForDatalog(f.SourceConversation), boolToDatalog(f.Valid), f.CreatedAt, f.UpdatedAt)
+	}
+	sb.WriteString("\n")
+	return len(facts)
+}
+
+func exportDatalogDecisions(sb *strings.Builder, decisions []Decision) int {
+	if decisions == nil {
+		return 0
+	}
+	for _, d := range decisions {
+		fmt.Fprintf(sb, "?[id, title, rationale, alternatives, context, source_agent, source_conversation, status, created_at, updated_at] <- [['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d]] :put mie_decision { id => title, rationale, alternatives, context, source_agent, source_conversation, status, created_at, updated_at }\n",
+			escapeForDatalog(d.ID), escapeForDatalog(d.Title), escapeForDatalog(d.Rationale), escapeForDatalog(d.Alternatives), escapeForDatalog(d.Context), escapeForDatalog(d.SourceAgent), escapeForDatalog(d.SourceConversation), escapeForDatalog(d.Status), d.CreatedAt, d.UpdatedAt)
+	}
+	sb.WriteString("\n")
+	return len(decisions)
+}
+
+func exportDatalogEntities(sb *strings.Builder, entities []Entity) int {
+	if entities == nil {
+		return 0
+	}
+	for _, e := range entities {
+		fmt.Fprintf(sb, "?[id, name, kind, description, source_agent, created_at, updated_at] <- [['%s', '%s', '%s', '%s', '%s', %d, %d]] :put mie_entity { id => name, kind, description, source_agent, created_at, updated_at }\n",
+			escapeForDatalog(e.ID), escapeForDatalog(e.Name), escapeForDatalog(e.Kind), escapeForDatalog(e.Description), escapeForDatalog(e.SourceAgent), e.CreatedAt, e.UpdatedAt)
+	}
+	sb.WriteString("\n")
+	return len(entities)
+}
+
+func exportDatalogEvents(sb *strings.Builder, events []Event) int {
+	if events == nil {
+		return 0
+	}
+	for _, ev := range events {
+		fmt.Fprintf(sb, "?[id, title, description, event_date, source_agent, source_conversation, created_at, updated_at] <- [['%s', '%s', '%s', '%s', '%s', '%s', %d, %d]] :put mie_event { id => title, description, event_date, source_agent, source_conversation, created_at, updated_at }\n",
+			escapeForDatalog(ev.ID), escapeForDatalog(ev.Title), escapeForDatalog(ev.Description), escapeForDatalog(ev.EventDate), escapeForDatalog(ev.SourceAgent), escapeForDatalog(ev.SourceConversation), ev.CreatedAt, ev.UpdatedAt)
+	}
+	sb.WriteString("\n")
+	return len(events)
+}
+
+func exportDatalogTopics(sb *strings.Builder, topics []Topic) int {
+	if topics == nil {
+		return 0
+	}
+	for _, t := range topics {
+		fmt.Fprintf(sb, "?[id, name, description, created_at, updated_at] <- [['%s', '%s', '%s', %d, %d]] :put mie_topic { id => name, description, created_at, updated_at }\n",
+			escapeForDatalog(t.ID), escapeForDatalog(t.Name), escapeForDatalog(t.Description), t.CreatedAt, t.UpdatedAt)
+	}
+	sb.WriteString("\n")
+	return len(topics)
+}
+
+func exportDatalogEdges(sb *strings.Builder, edges map[string]any) {
+	if edges == nil {
+		return
+	}
+	for edgeName, rows := range edges {
+		tableName := "mie_" + edgeName
+		schema, hasSchema := exportEdgeTables[tableName]
+		if !hasSchema {
+			continue
+		}
+		allCols := schema.allColumns()
+		putSuffix := buildEdgePutSuffix(schema)
+
+		switch typedRows := rows.(type) {
+		case []map[string]string:
+			for _, row := range typedRows {
+				writeDatalogEdgeRow(sb, allCols, row, tableName, putSuffix)
+			}
+		case []any:
+			for _, item := range typedRows {
+				if row, ok := item.(map[string]any); ok {
+					strRow := make(map[string]string, len(row))
+					for k, v := range row {
+						strRow[k] = fmt.Sprint(v)
+					}
+					writeDatalogEdgeRow(sb, allCols, strRow, tableName, putSuffix)
+				}
+			}
+		}
+		sb.WriteString("\n")
+	}
+}
+
+func buildEdgePutSuffix(schema edgeSchema) string {
+	putSuffix := strings.Join(schema.Keys, ", ")
+	if len(schema.Values) > 0 {
+		putSuffix += " => " + strings.Join(schema.Values, ", ")
+	}
+	return putSuffix
+}
+
+func writeDatalogEdgeRow(sb *strings.Builder, allCols []string, rowData map[string]string, tableName, putSuffix string) {
+	var colNames []string
+	var colValues []string
+	for _, col := range allCols {
+		colNames = append(colNames, col)
+		colValues = append(colValues, fmt.Sprintf("'%s'", escapeForDatalog(rowData[col])))
+	}
+	fmt.Fprintf(sb, "?[%s] <- [[%s]] :put %s { %s }\n",
+		strings.Join(colNames, ", "),
+		strings.Join(colValues, ", "),
+		tableName,
+		putSuffix)
 }
 
 // escapeForDatalog escapes a string for use in CozoDB single-quoted Datalog literals.

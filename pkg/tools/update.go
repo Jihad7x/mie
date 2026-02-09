@@ -51,7 +51,7 @@ func updateInvalidate(ctx context.Context, client Querier, nodeID string, args m
 
 	// Verify the fact exists before invalidating.
 	if _, err := client.GetNodeByID(ctx, nodeID); err != nil {
-		return NewError(fmt.Sprintf("Fact %q not found", nodeID)), nil
+		return NewError(fmt.Sprintf("Fact %q not found", nodeID)), nil //nolint:nilerr // MCP error in ToolResult
 	}
 
 	replacementID := GetStringArg(args, "replacement_id", "")
@@ -64,7 +64,7 @@ func updateInvalidate(ctx context.Context, client Querier, nodeID string, args m
 		}
 		// Verify the replacement fact exists.
 		if _, err := client.GetNodeByID(ctx, replacementID); err != nil {
-			return NewError(fmt.Sprintf("Replacement fact %q not found", replacementID)), nil
+			return NewError(fmt.Sprintf("Replacement fact %q not found", replacementID)), nil //nolint:nilerr // MCP error in ToolResult
 		}
 
 		err := client.InvalidateFact(ctx, nodeID, replacementID, reason)

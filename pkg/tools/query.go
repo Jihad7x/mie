@@ -265,7 +265,7 @@ func queryGraphMode(ctx context.Context, client Querier, args map[string]any) (*
 
 	// Verify the node exists before traversal.
 	if _, err := client.GetNodeByID(ctx, nodeID); err != nil {
-		return NewError(fmt.Sprintf("Node %q not found", nodeID)), nil
+		return NewError(fmt.Sprintf("Node %q not found", nodeID)), nil //nolint:nilerr // MCP error in ToolResult
 	}
 
 	var sb strings.Builder

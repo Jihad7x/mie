@@ -64,14 +64,8 @@ func List(ctx context.Context, client Querier, args map[string]any) (*ToolResult
 	}
 
 	// Validate filter applicability
-	if opts.Category != "" && nodeType != "fact" {
-		return NewError(fmt.Sprintf("category filter only applies to facts, not %s", nodeType)), nil
-	}
-	if opts.Kind != "" && nodeType != "entity" {
-		return NewError(fmt.Sprintf("kind filter only applies to entities, not %s", nodeType)), nil
-	}
-	if opts.Status != "" && nodeType != "decision" {
-		return NewError(fmt.Sprintf("status filter only applies to decisions, not %s", nodeType)), nil
+	if toolErr := validateListFilters(opts, nodeType); toolErr != nil {
+		return toolErr, nil
 	}
 
 	nodes, total, err := client.ListNodes(ctx, opts)
@@ -103,6 +97,19 @@ func List(ctx context.Context, client Querier, args map[string]any) (*ToolResult
 	}
 
 	return NewResult(sb.String()), nil
+}
+
+func validateListFilters(opts ListOptions, nodeType string) *ToolResult {
+	if opts.Category != "" && nodeType != "fact" {
+		return NewError(fmt.Sprintf("category filter only applies to facts, not %s", nodeType))
+	}
+	if opts.Kind != "" && nodeType != "entity" {
+		return NewError(fmt.Sprintf("kind filter only applies to entities, not %s", nodeType))
+	}
+	if opts.Status != "" && nodeType != "decision" {
+		return NewError(fmt.Sprintf("status filter only applies to decisions, not %s", nodeType))
+	}
+	return nil
 }
 
 func formatNodeTable(sb *strings.Builder, nodeType string, nodes []any, offset int) {

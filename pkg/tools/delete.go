@@ -34,7 +34,7 @@ func deleteNode(ctx context.Context, client Querier, args map[string]any) (*Tool
 
 	node, err := client.GetNodeByID(ctx, nodeID)
 	if err != nil || node == nil {
-		return NewError(fmt.Sprintf("Node %q not found", nodeID)), nil
+		return NewError(fmt.Sprintf("Node %q not found", nodeID)), nil //nolint:nilerr // MCP error in ToolResult
 	}
 
 	if err := client.DeleteNode(ctx, nodeID); err != nil {

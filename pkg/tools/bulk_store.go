@@ -238,60 +238,73 @@ func bulkPreValidate(items []any) []string {
 			errors = append(errors, fmt.Sprintf("item[%d]: invalid type %q", i, nodeType))
 			continue
 		}
+		errors = append(errors, validateBulkItemFields(itemArgs, nodeType, i)...)
+	}
+	return errors
+}
 
-		switch nodeType {
-		case "fact":
-			content := GetStringArg(itemArgs, "content", "")
-			if content == "" {
-				errors = append(errors, fmt.Sprintf("item[%d] (fact): content is required", i))
-			} else if len(content) > maxContentLength {
-				errors = append(errors, fmt.Sprintf("item[%d] (fact): content exceeds maximum length", i))
-			}
-			category := GetStringArg(itemArgs, "category", "general")
-			if !validFactCategories[category] {
-				errors = append(errors, fmt.Sprintf("item[%d] (fact): invalid category %q", i, category))
-			}
-			confidence := GetFloat64Arg(itemArgs, "confidence", 0.8)
-			if confidence < 0 || confidence > 1.0 {
-				errors = append(errors, fmt.Sprintf("item[%d] (fact): confidence must be between 0.0 and 1.0", i))
-			}
-		case "decision":
-			if GetStringArg(itemArgs, "title", "") == "" {
-				errors = append(errors, fmt.Sprintf("item[%d] (decision): title is required", i))
-			}
-			if GetStringArg(itemArgs, "rationale", "") == "" {
-				errors = append(errors, fmt.Sprintf("item[%d] (decision): rationale is required", i))
-			}
-			alternatives := GetStringArg(itemArgs, "alternatives", "[]")
-			var altJSON []any
-			if err := json.Unmarshal([]byte(alternatives), &altJSON); err != nil {
-				errors = append(errors, fmt.Sprintf("item[%d] (decision): alternatives must be a valid JSON array", i))
-			}
-		case "entity":
-			if GetStringArg(itemArgs, "name", "") == "" {
-				errors = append(errors, fmt.Sprintf("item[%d] (entity): name is required", i))
-			}
-			kind := GetStringArg(itemArgs, "kind", "")
-			if kind == "" {
-				errors = append(errors, fmt.Sprintf("item[%d] (entity): kind is required", i))
-			} else if !validEntityKinds[kind] {
-				errors = append(errors, fmt.Sprintf("item[%d] (entity): invalid kind %q", i, kind))
-			}
-		case "event":
-			if GetStringArg(itemArgs, "title", "") == "" {
-				errors = append(errors, fmt.Sprintf("item[%d] (event): title is required", i))
-			}
-			eventDate := GetStringArg(itemArgs, "event_date", "")
-			if eventDate == "" {
-				errors = append(errors, fmt.Sprintf("item[%d] (event): event_date is required", i))
-			} else if _, err := time.Parse("2006-01-02", eventDate); err != nil {
-				errors = append(errors, fmt.Sprintf("item[%d] (event): invalid event_date format %q", i, eventDate))
-			}
-		case "topic":
-			if GetStringArg(itemArgs, "name", "") == "" {
-				errors = append(errors, fmt.Sprintf("item[%d] (topic): name is required", i))
-			}
+// validateBulkItemFields validates the fields of a single bulk store item.
+func validateBulkItemFields(itemArgs map[string]any, nodeType string, idx int) []string {
+	var errors []string
+	switch nodeType {
+	case "fact":
+		errors = append(errors, validateBulkFact(itemArgs, idx)...)
+	case "decision":
+		if GetStringArg(itemArgs, "title", "") == "" {
+			errors = append(errors, fmt.Sprintf("item[%d] (decision): title is required", idx))
 		}
+		if GetStringArg(itemArgs, "rationale", "") == "" {
+			errors = append(errors, fmt.Sprintf("item[%d] (decision): rationale is required", idx))
+		}
+		alternatives := GetStringArg(itemArgs, "alternatives", "[]")
+		var altJSON []any
+		if err := json.Unmarshal([]byte(alternatives), &altJSON); err != nil {
+			errors = append(errors, fmt.Sprintf("item[%d] (decision): alternatives must be a valid JSON array", idx))
+		}
+	case "entity":
+		if GetStringArg(itemArgs, "name", "") == "" {
+			errors = append(errors, fmt.Sprintf("item[%d] (entity): name is required", idx))
+		}
+		kind := GetStringArg(itemArgs, "kind", "")
+		if kind == "" {
+			errors = append(errors, fmt.Sprintf("item[%d] (entity): kind is required", idx))
+		} else if !validEntityKinds[kind] {
+			errors = append(errors, fmt.Sprintf("item[%d] (entity): invalid kind %q", idx, kind))
+		}
+	case "event":
+		if GetStringArg(itemArgs, "title", "") == "" {
+			errors = append(errors, fmt.Sprintf("item[%d] (event): title is required", idx))
+		}
+		eventDate := GetStringArg(itemArgs, "event_date", "")
+		if eventDate == "" {
+			errors = append(errors, fmt.Sprintf("item[%d] (event): event_date is required", idx))
+		} else if _, err := time.Parse("2006-01-02", eventDate); err != nil {
+			errors = append(errors, fmt.Sprintf("item[%d] (event): invalid event_date format %q", idx, eventDate))
+		}
+	case "topic":
+		if GetStringArg(itemArgs, "name", "") == "" {
+			errors = append(errors, fmt.Sprintf("item[%d] (topic): name is required", idx))
+		}
+	}
+	return errors
+}
+
+// validateBulkFact validates fact-specific fields in a bulk store item.
+func validateBulkFact(itemArgs map[string]any, idx int) []string {
+	var errors []string
+	content := GetStringArg(itemArgs, "content", "")
+	if content == "" {
+		errors = append(errors, fmt.Sprintf("item[%d] (fact): content is required", idx))
+	} else if len(content) > maxContentLength {
+		errors = append(errors, fmt.Sprintf("item[%d] (fact): content exceeds maximum length", idx))
+	}
+	category := GetStringArg(itemArgs, "category", "general")
+	if !validFactCategories[category] {
+		errors = append(errors, fmt.Sprintf("item[%d] (fact): invalid category %q", idx, category))
+	}
+	confidence := GetFloat64Arg(itemArgs, "confidence", 0.8)
+	if confidence < 0 || confidence > 1.0 {
+		errors = append(errors, fmt.Sprintf("item[%d] (fact): confidence must be between 0.0 and 1.0", idx))
 	}
 	return errors
 }

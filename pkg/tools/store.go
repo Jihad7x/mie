@@ -56,7 +56,7 @@ func Store(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 			return NewError(fmt.Sprintf("invalidates must reference a fact ID (got %q)", invalidates)), nil
 		}
 		if target, err := client.GetNodeByID(ctx, invalidates); err != nil || target == nil {
-			return NewError(fmt.Sprintf("invalidates target %q not found", invalidates)), nil
+			return NewError(fmt.Sprintf("invalidates target %q not found", invalidates)), nil //nolint:nilerr // MCP error in ToolResult
 		}
 	}
 
@@ -327,15 +327,9 @@ func storeRelationships(ctx context.Context, client Querier, sourceNodeID string
 		}
 
 		// Validate source and target node types match the edge semantics.
-		if endpoints, ok := validEdgeEndpoints[edgeType]; ok {
-			if !strings.HasPrefix(sourceNodeID, endpoints[0]) {
-				sb.WriteString(fmt.Sprintf("- Skipped %s: source node [%s] must be a %s node\n", edgeType, sourceNodeID, strings.TrimSuffix(endpoints[0], ":")))
-				continue
-			}
-			if !strings.HasPrefix(targetID, endpoints[1]) {
-				sb.WriteString(fmt.Sprintf("- Skipped %s: target node [%s] must be a %s node\n", edgeType, targetID, strings.TrimSuffix(endpoints[1], ":")))
-				continue
-			}
+		if msg := validateEdgeEndpoints(edgeType, sourceNodeID, targetID); msg != "" {
+			sb.WriteString(msg)
+			continue
 		}
 
 		fields := buildEdgeFields(edgeType, sourceNodeID, targetID, relMap)
@@ -350,6 +344,20 @@ func storeRelationships(ctx context.Context, client Querier, sourceNodeID string
 		}
 	}
 	return sb.String()
+}
+
+func validateEdgeEndpoints(edgeType, sourceNodeID, targetID string) string {
+	endpoints, ok := validEdgeEndpoints[edgeType]
+	if !ok {
+		return ""
+	}
+	if !strings.HasPrefix(sourceNodeID, endpoints[0]) {
+		return fmt.Sprintf("- Skipped %s: source node [%s] must be a %s node\n", edgeType, sourceNodeID, strings.TrimSuffix(endpoints[0], ":"))
+	}
+	if !strings.HasPrefix(targetID, endpoints[1]) {
+		return fmt.Sprintf("- Skipped %s: target node [%s] must be a %s node\n", edgeType, targetID, strings.TrimSuffix(endpoints[1], ":"))
+	}
+	return ""
 }
 
 func buildEdgeFields(edgeType, sourceNodeID, targetID string, relMap map[string]any) map[string]string {
