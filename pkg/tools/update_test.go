@@ -14,6 +14,9 @@ import (
 func TestUpdate_Invalidate(t *testing.T) {
 	called := false
 	mock := &MockQuerier{
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			return &Fact{ID: nodeID}, nil
+		},
 		InvalidateFactFunc: func(ctx context.Context, oldFactID, newFactID, reason string) error {
 			called = true
 			if oldFactID != "fact:abc123" {
@@ -27,9 +30,10 @@ func TestUpdate_Invalidate(t *testing.T) {
 	}
 
 	result, err := Update(context.Background(), mock, map[string]any{
-		"node_id": "fact:abc123",
-		"action":  "invalidate",
-		"reason":  "User moved",
+		"node_id":        "fact:abc123",
+		"action":         "invalidate",
+		"reason":         "User moved",
+		"replacement_id": "fact:new789",
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -46,7 +50,11 @@ func TestUpdate_Invalidate(t *testing.T) {
 }
 
 func TestUpdate_InvalidateWithReplacement(t *testing.T) {
-	mock := &MockQuerier{}
+	mock := &MockQuerier{
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			return &Fact{ID: nodeID}, nil
+		},
+	}
 	result, err := Update(context.Background(), mock, map[string]any{
 		"node_id":        "fact:abc123",
 		"action":         "invalidate",
@@ -209,16 +217,87 @@ func TestUpdate_InvalidAction(t *testing.T) {
 	}
 }
 
+func TestUpdate_InvalidateMissingReplacement(t *testing.T) {
+	mock := &MockQuerier{}
+	result, _ := Update(context.Background(), mock, map[string]any{
+		"node_id": "fact:abc123",
+		"action":  "invalidate",
+		"reason":  "test",
+	})
+	if !result.IsError {
+		t.Error("Update() should require replacement_id for invalidation")
+	}
+}
+
+func TestUpdate_InvalidateSelfReference(t *testing.T) {
+	mock := &MockQuerier{}
+	result, _ := Update(context.Background(), mock, map[string]any{
+		"node_id":        "fact:abc123",
+		"action":         "invalidate",
+		"reason":         "test",
+		"replacement_id": "fact:abc123",
+	})
+	if !result.IsError {
+		t.Error("Update() should reject self-referencing invalidation")
+	}
+	if !strings.Contains(result.Text, "cannot be the same") {
+		t.Errorf("Expected self-reference error message, got: %s", result.Text)
+	}
+}
+
+func TestUpdate_InvalidateReplacementNotFound(t *testing.T) {
+	mock := &MockQuerier{
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			if nodeID == "fact:abc123" {
+				return &Fact{ID: nodeID}, nil
+			}
+			return nil, fmt.Errorf("not found")
+		},
+	}
+	result, _ := Update(context.Background(), mock, map[string]any{
+		"node_id":        "fact:abc123",
+		"action":         "invalidate",
+		"reason":         "test",
+		"replacement_id": "fact:nonexistent",
+	})
+	if !result.IsError {
+		t.Error("Update() should reject invalidation when replacement fact doesn't exist")
+	}
+	if !strings.Contains(result.Text, "Replacement fact") {
+		t.Errorf("Expected replacement not found error, got: %s", result.Text)
+	}
+}
+
+func TestUpdate_UpdateStatusError(t *testing.T) {
+	mock := &MockQuerier{
+		UpdateStatusFunc: func(ctx context.Context, nodeID, newStatus string) error {
+			return fmt.Errorf("decision %q not found", nodeID)
+		},
+	}
+	result, _ := Update(context.Background(), mock, map[string]any{
+		"node_id":   "dec:nonexistent",
+		"action":    "update_status",
+		"new_value": "superseded",
+	})
+	if !result.IsError {
+		t.Error("Update() should return error when decision not found")
+	}
+}
+
 func TestUpdate_InvalidateError(t *testing.T) {
 	mock := &MockQuerier{
+		GetNodeByIDFunc: func(ctx context.Context, nodeID string) (any, error) {
+			return &Fact{ID: nodeID}, nil
+		},
 		InvalidateFactFunc: func(ctx context.Context, oldFactID, newFactID, reason string) error {
 			return fmt.Errorf("db error")
 		},
 	}
 	result, _ := Update(context.Background(), mock, map[string]any{
-		"node_id": "fact:abc",
-		"action":  "invalidate",
-		"reason":  "test",
+		"node_id":        "fact:abc",
+		"action":         "invalidate",
+		"reason":         "test",
+		"replacement_id": "fact:new123",
 	})
 	if !result.IsError {
 		t.Error("Update() should return error when invalidation fails")

@@ -50,8 +50,24 @@ func updateInvalidate(ctx context.Context, client Querier, nodeID string, args m
 	}
 
 	replacementID := GetStringArg(args, "replacement_id", "")
-	if replacementID != "" && !strings.HasPrefix(replacementID, "fact:") {
+	if replacementID == "" {
+		return NewError("replacement_id is required for invalidate action"), nil
+	}
+	if !strings.HasPrefix(replacementID, "fact:") {
 		return NewError(fmt.Sprintf("replacement_id must be a fact ID (prefix 'fact:'), got %q", replacementID)), nil
+	}
+	if replacementID == nodeID {
+		return NewError("replacement_id cannot be the same as the fact being invalidated"), nil
+	}
+
+	// Verify the fact exists before invalidating.
+	if _, err := client.GetNodeByID(ctx, nodeID); err != nil {
+		return NewError(fmt.Sprintf("Fact %q not found", nodeID)), nil
+	}
+
+	// Verify the replacement fact exists.
+	if _, err := client.GetNodeByID(ctx, replacementID); err != nil {
+		return NewError(fmt.Sprintf("Replacement fact %q not found", replacementID)), nil
 	}
 
 	err := client.InvalidateFact(ctx, nodeID, replacementID, reason)
@@ -59,10 +75,7 @@ func updateInvalidate(ctx context.Context, client Querier, nodeID string, args m
 		return NewError(fmt.Sprintf("Failed to invalidate fact: %v", err)), nil
 	}
 
-	output := fmt.Sprintf("Invalidated [%s]\nReason: %s", nodeID, reason)
-	if replacementID != "" {
-		output += fmt.Sprintf("\nReplaced by: [%s]", replacementID)
-	}
+	output := fmt.Sprintf("Invalidated [%s]\nReason: %s\nReplaced by: [%s]", nodeID, reason, replacementID)
 
 	return NewResult(output), nil
 }

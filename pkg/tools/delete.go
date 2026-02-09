@@ -32,6 +32,11 @@ func deleteNode(ctx context.Context, client Querier, args map[string]any) (*Tool
 		return NewError("Missing required parameter: node_id"), nil
 	}
 
+	node, err := client.GetNodeByID(ctx, nodeID)
+	if err != nil || node == nil {
+		return NewError(fmt.Sprintf("Node %q not found", nodeID)), nil
+	}
+
 	if err := client.DeleteNode(ctx, nodeID); err != nil {
 		return NewError(fmt.Sprintf("Failed to delete node: %v", err)), nil
 	}
@@ -43,6 +48,15 @@ func removeRelationship(ctx context.Context, client Querier, args map[string]any
 	edgeType := GetStringArg(args, "edge_type", "")
 	if edgeType == "" {
 		return NewError("Missing required parameter: edge_type"), nil
+	}
+
+	// Validate edge_type
+	validEdgeTypesForDelete := map[string]bool{
+		"mie_invalidates": true, "mie_decision_topic": true, "mie_decision_entity": true,
+		"mie_event_decision": true, "mie_fact_entity": true, "mie_fact_topic": true, "mie_entity_topic": true,
+	}
+	if !validEdgeTypesForDelete[edgeType] {
+		return NewError(fmt.Sprintf("Invalid edge_type %q. Must be one of: mie_invalidates, mie_decision_topic, mie_decision_entity, mie_event_decision, mie_fact_entity, mie_fact_topic, mie_entity_topic", edgeType)), nil
 	}
 
 	// Collect edge fields from the args.
