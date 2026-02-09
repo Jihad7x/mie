@@ -24,7 +24,14 @@ func Status(ctx context.Context, client Querier, args map[string]any) (*ToolResu
 	// Graph statistics
 	sb.WriteString("### Graph Statistics\n")
 	sb.WriteString(fmt.Sprintf("- Facts: %d (%d valid, %d invalidated)\n", stats.TotalFacts, stats.ValidFacts, stats.InvalidatedFacts))
-	sb.WriteString(fmt.Sprintf("- Decisions: %d (%d active, %d other)\n", stats.TotalDecisions, stats.ActiveDecisions, stats.TotalDecisions-stats.ActiveDecisions))
+	decisionDetail := fmt.Sprintf("%d active", stats.ActiveDecisions)
+	if stats.SupersededDecisions > 0 {
+		decisionDetail += fmt.Sprintf(", %d superseded", stats.SupersededDecisions)
+	}
+	if stats.ReversedDecisions > 0 {
+		decisionDetail += fmt.Sprintf(", %d reversed", stats.ReversedDecisions)
+	}
+	sb.WriteString(fmt.Sprintf("- Decisions: %d (%s)\n", stats.TotalDecisions, decisionDetail))
 	sb.WriteString(fmt.Sprintf("- Entities: %d\n", stats.TotalEntities))
 	sb.WriteString(fmt.Sprintf("- Events: %d\n", stats.TotalEvents))
 	sb.WriteString(fmt.Sprintf("- Topics: %d\n", stats.TotalTopics))
@@ -57,7 +64,16 @@ func Status(ctx context.Context, client Querier, args map[string]any) (*ToolResu
 		sb.WriteString("- Database accessible (empty graph)\n")
 	}
 	if client.EmbeddingsEnabled() {
-		sb.WriteString("- Embeddings: active\n")
+		totalEmb := stats.FactEmbeddings + stats.DecisionEmbeddings + stats.EntityEmbeddings + stats.EventEmbeddings
+		sb.WriteString(fmt.Sprintf("- Embeddings: active (%d total)\n", totalEmb))
+		sb.WriteString(fmt.Sprintf("  - Facts: %d/%d", stats.FactEmbeddings, stats.TotalFacts))
+		if stats.TotalFacts > 0 && stats.FactEmbeddings < stats.TotalFacts {
+			sb.WriteString(" (missing embeddings!)")
+		}
+		sb.WriteString("\n")
+		sb.WriteString(fmt.Sprintf("  - Decisions: %d/%d\n", stats.DecisionEmbeddings, stats.TotalDecisions))
+		sb.WriteString(fmt.Sprintf("  - Entities: %d/%d\n", stats.EntityEmbeddings, stats.TotalEntities))
+		sb.WriteString(fmt.Sprintf("  - Events: %d/%d\n", stats.EventEmbeddings, stats.TotalEvents))
 	} else {
 		sb.WriteString("- Embeddings: not configured\n")
 	}
