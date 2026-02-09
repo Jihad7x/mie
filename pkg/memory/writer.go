@@ -262,15 +262,16 @@ func (w *Writer) InvalidateFact(ctx context.Context, oldFactID, newFactID, reaso
 
 // AddRelationship creates an edge between two nodes in the memory graph.
 func (w *Writer) AddRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
-	cols, ok := ValidEdgeTables[edgeType]
+	schema, ok := ValidEdgeTables[edgeType]
 	if !ok {
 		return fmt.Errorf("unknown edge type: %s", edgeType)
 	}
 
-	// Build column values
+	// Build column values from all columns (keys + values).
+	allCols := schema.AllColumns()
 	var colNames []string
 	var colValues []string
-	for _, col := range cols {
+	for _, col := range allCols {
 		val, exists := fields[col]
 		if !exists {
 			return fmt.Errorf("missing required field %q for edge type %s", col, edgeType)
@@ -279,27 +280,12 @@ func (w *Writer) AddRelationship(ctx context.Context, edgeType string, fields ma
 		colValues = append(colValues, fmt.Sprintf(`'%s'`, escapeDatalog(val)))
 	}
 
-	// Handle optional value columns (like role for mie_decision_entity, reason for mie_invalidates)
-	for k, v := range fields {
-		found := false
-		for _, col := range cols {
-			if col == k {
-				found = true
-				break
-			}
-		}
-		if !found {
-			colNames = append(colNames, k)
-			colValues = append(colValues, fmt.Sprintf(`'%s'`, escapeDatalog(v)))
-		}
-	}
-
 	mutation := fmt.Sprintf(
 		`?[%s] <- [[%s]] :put %s { %s }`,
-		joinStrings(colNames, ", "),
-		joinStrings(colValues, ", "),
+		strings.Join(colNames, ", "),
+		strings.Join(colValues, ", "),
 		edgeType,
-		joinStrings(colNames, ", "),
+		strings.Join(colNames, ", "),
 	)
 
 	if err := w.backend.Execute(ctx, mutation); err != nil {
@@ -437,14 +423,15 @@ func (w *Writer) DeleteNode(ctx context.Context, nodeID string) error {
 
 // RemoveRelationship deletes a specific edge between two nodes.
 func (w *Writer) RemoveRelationship(ctx context.Context, edgeType string, fields map[string]string) error {
-	cols, ok := ValidEdgeTables[edgeType]
+	schema, ok := ValidEdgeTables[edgeType]
 	if !ok {
 		return fmt.Errorf("unknown edge type: %s", edgeType)
 	}
 
+	// Use only key columns for :rm operations.
 	var colNames []string
 	var colValues []string
-	for _, col := range cols {
+	for _, col := range schema.Keys {
 		val, exists := fields[col]
 		if !exists {
 			return fmt.Errorf("missing required field %q for edge type %s", col, edgeType)
@@ -454,10 +441,10 @@ func (w *Writer) RemoveRelationship(ctx context.Context, edgeType string, fields
 	}
 
 	mutation := fmt.Sprintf(`?[%s] <- [[%s]] :rm %s { %s }`,
-		joinStrings(colNames, ", "),
-		joinStrings(colValues, ", "),
+		strings.Join(colNames, ", "),
+		strings.Join(colValues, ", "),
 		edgeType,
-		joinStrings(colNames, ", "),
+		strings.Join(colNames, ", "),
 	)
 
 	if err := w.backend.Execute(ctx, mutation); err != nil {
@@ -522,14 +509,19 @@ func (w *Writer) cascadeDeleteEdges(ctx context.Context, nodeType, nodeID string
 	}
 
 	for _, edge := range edgesToClean {
-		cols := ValidEdgeTables[edge.table]
-		if len(cols) < 2 {
+		schema, ok := ValidEdgeTables[edge.table]
+		if !ok || len(schema.Keys) < 2 {
 			continue
 		}
-		colList := joinStrings(cols, ", ")
+		// Query all columns but only specify key columns in :rm.
+		allCols := schema.AllColumns()
+		allColList := strings.Join(allCols, ", ")
+		keyColList := strings.Join(schema.Keys, ", ")
 		script := fmt.Sprintf(`?[%s] := *%s { %s }, %s = '%s' :rm %s { %s }`,
-			colList, edge.table, colList, edge.col, escaped, edge.table, colList)
-		_ = w.backend.Execute(ctx, script)
+			keyColList, edge.table, allColList, edge.col, escaped, edge.table, keyColList)
+		if err := w.backend.Execute(ctx, script); err != nil {
+			w.logger.Warn("cascade delete edge failed", "table", edge.table, "node_id", nodeID, "error", err)
+		}
 	}
 }
 

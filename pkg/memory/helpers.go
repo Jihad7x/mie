@@ -45,15 +45,29 @@ var ValidEntityRoles = []string{
 	"context",
 }
 
-// ValidEdgeTables maps edge table names to their key columns.
-var ValidEdgeTables = map[string][]string{
-	"mie_invalidates":     {"new_fact_id", "old_fact_id"},
-	"mie_decision_topic":  {"decision_id", "topic_id"},
-	"mie_decision_entity": {"decision_id", "entity_id", "role"},
-	"mie_event_decision":  {"event_id", "decision_id"},
-	"mie_fact_entity":     {"fact_id", "entity_id"},
-	"mie_fact_topic":      {"fact_id", "topic_id"},
-	"mie_entity_topic":    {"entity_id", "topic_id"},
+// EdgeTableSchema describes the key and value columns for an edge table.
+type EdgeTableSchema struct {
+	Keys   []string
+	Values []string
+}
+
+// AllColumns returns all columns (keys followed by values).
+func (e EdgeTableSchema) AllColumns() []string {
+	all := make([]string, 0, len(e.Keys)+len(e.Values))
+	all = append(all, e.Keys...)
+	all = append(all, e.Values...)
+	return all
+}
+
+// ValidEdgeTables maps edge table names to their key and value columns.
+var ValidEdgeTables = map[string]EdgeTableSchema{
+	"mie_invalidates":     {Keys: []string{"new_fact_id", "old_fact_id"}, Values: []string{"reason"}},
+	"mie_decision_topic":  {Keys: []string{"decision_id", "topic_id"}},
+	"mie_decision_entity": {Keys: []string{"decision_id", "entity_id"}, Values: []string{"role"}},
+	"mie_event_decision":  {Keys: []string{"event_id", "decision_id"}},
+	"mie_fact_entity":     {Keys: []string{"fact_id", "entity_id"}},
+	"mie_fact_topic":      {Keys: []string{"fact_id", "topic_id"}},
+	"mie_entity_topic":    {Keys: []string{"entity_id", "topic_id"}},
 }
 
 func isValidCategory(cat string) bool {

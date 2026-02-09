@@ -841,11 +841,12 @@ func (r *Reader) GetStats(ctx context.Context) (*tools.GraphStats, error) {
 	}
 	totalEdges := 0
 	for _, et := range edgeTables {
-		cols := ValidEdgeTables[et]
-		if len(cols) < 2 {
+		schema := ValidEdgeTables[et]
+		if len(schema.Keys) < 2 {
 			continue
 		}
-		query := fmt.Sprintf(`?[count(%s)] := *%s { %s }`, cols[0], et, strings.Join(cols, ", "))
+		allCols := schema.AllColumns()
+		query := fmt.Sprintf(`?[count(%s)] := *%s { %s }`, schema.Keys[0], et, strings.Join(allCols, ", "))
 		result, err := r.backend.Query(ctx, query)
 		if err != nil {
 			continue
@@ -973,8 +974,8 @@ var edgeRequiredNodeTypes = map[string][2]string{
 	"mie_invalidates":     {"fact", "fact"},
 }
 
-// exportEdges exports relationship edges, filtered to only edges where both endpoint
-// node types are in the requested set.
+// exportEdges exports relationship edges, filtered to only edges where at least one
+// endpoint node type is in the requested set.
 func (r *Reader) exportEdges(ctx context.Context, nodeTypes []string) (map[string]any, int) {
 	edges := make(map[string]any)
 	totalEdges := 0
@@ -984,19 +985,20 @@ func (r *Reader) exportEdges(ctx context.Context, nodeTypes []string) (map[strin
 		typeSet[nt] = true
 	}
 
-	for tableName, cols := range ValidEdgeTables {
-		if len(cols) < 2 {
+	for tableName, schema := range ValidEdgeTables {
+		if len(schema.Keys) < 2 {
 			continue
 		}
 
-		// Filter: only export edges whose endpoint types are both in the requested set.
+		// Filter: export edges where at least one endpoint type is in the requested set.
 		if req, ok := edgeRequiredNodeTypes[tableName]; ok {
-			if !typeSet[req[0]] || !typeSet[req[1]] {
+			if !typeSet[req[0]] && !typeSet[req[1]] {
 				continue
 			}
 		}
 
-		colList := strings.Join(cols, ", ")
+		allCols := schema.AllColumns()
+		colList := strings.Join(allCols, ", ")
 		script := fmt.Sprintf(`?[%s] := *%s { %s }`, colList, tableName, colList)
 
 		qr, err := r.backend.Query(ctx, script)
@@ -1011,7 +1013,7 @@ func (r *Reader) exportEdges(ctx context.Context, nodeTypes []string) (map[strin
 		var rows []map[string]string
 		for _, row := range qr.Rows {
 			entry := make(map[string]string)
-			for i, col := range cols {
+			for i, col := range allCols {
 				if i < len(row) {
 					entry[col] = toString(row[i])
 				}
