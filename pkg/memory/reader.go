@@ -50,6 +50,7 @@ func (r *Reader) SemanticSearch(ctx context.Context, query string, nodeTypes []s
 
 	vecStr := formatVector(queryEmb)
 	var results []tools.SearchResult
+	var searchErrors []string
 
 	if len(nodeTypes) == 0 {
 		nodeTypes = []string{"fact", "decision", "entity", "event"}
@@ -97,6 +98,7 @@ func (r *Reader) SemanticSearch(ctx context.Context, query string, nodeTypes []s
 		qr, err := r.backend.Query(ctx, script)
 		if err != nil {
 			r.logger.Warn("semantic search failed for type", "type", nt, "error", err)
+			searchErrors = append(searchErrors, fmt.Sprintf("%s: %v", nt, err))
 			continue
 		}
 
@@ -106,12 +108,39 @@ func (r *Reader) SemanticSearch(ctx context.Context, query string, nodeTypes []s
 		}
 	}
 
+	// Boost results whose content/name/title contains the query (case-insensitive).
+	lowerQuery := strings.ToLower(query)
+	for i := range results {
+		text := strings.ToLower(results[i].Content)
+		if strings.Contains(text, lowerQuery) {
+			results[i].Distance *= 0.5
+			if results[i].Distance < 0.001 {
+				results[i].Distance = 0.001
+			}
+		}
+	}
+
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Distance < results[j].Distance
 	})
 
+	// Filter out very low similarity results (distance > 0.6 means < 40% similarity).
+	filtered := results[:0]
+	for _, r := range results {
+		if r.Distance <= 0.6 {
+			filtered = append(filtered, r)
+		}
+	}
+	results = filtered
+
 	if len(results) > limit {
 		results = results[:limit]
+	}
+
+	// Surface HNSW query errors: return results (if any) alongside a non-nil error
+	// so the caller can show a warning about partial failures.
+	if len(searchErrors) > 0 {
+		return results, fmt.Errorf("partial search failure: %s", strings.Join(searchErrors, "; "))
 	}
 
 	return results, nil
@@ -123,11 +152,17 @@ func (r *Reader) ExactSearch(ctx context.Context, query string, nodeTypes []stri
 		limit = 10
 	}
 
-	escaped := escapeDatalog(query)
+	escaped := escapeDatalog(strings.ToLower(query))
 	var results []tools.SearchResult
 
 	if len(nodeTypes) == 0 {
 		nodeTypes = []string{"fact", "decision", "entity", "event", "topic"}
+	}
+
+	// Distribute limit across types so no single type dominates results.
+	perTypeLimit := limit
+	if len(nodeTypes) > 1 {
+		perTypeLimit = (limit / len(nodeTypes)) + 1
 	}
 
 	for _, nt := range nodeTypes {
@@ -136,28 +171,28 @@ func (r *Reader) ExactSearch(ctx context.Context, query string, nodeTypes []stri
 		case "fact":
 			script = fmt.Sprintf(`?[id, content, category, confidence, valid, created_at] :=
     *mie_fact { id, content, category, confidence, valid, created_at },
-    str_includes(content, '%s')
-    :limit %d`, escaped, limit)
+    str_includes(lowercase(content), '%s')
+    :limit %d`, escaped, perTypeLimit)
 		case "decision":
 			script = fmt.Sprintf(`?[id, title, rationale, status, created_at] :=
     *mie_decision { id, title, rationale, status, created_at },
-    or(str_includes(title, '%s'), str_includes(rationale, '%s'))
-    :limit %d`, escaped, escaped, limit)
+    or(str_includes(lowercase(title), '%s'), str_includes(lowercase(rationale), '%s'))
+    :limit %d`, escaped, escaped, perTypeLimit)
 		case "entity":
 			script = fmt.Sprintf(`?[id, name, kind, description, created_at] :=
     *mie_entity { id, name, kind, description, created_at },
-    or(str_includes(name, '%s'), str_includes(description, '%s'))
-    :limit %d`, escaped, escaped, limit)
+    or(str_includes(lowercase(name), '%s'), str_includes(lowercase(description), '%s'))
+    :limit %d`, escaped, escaped, perTypeLimit)
 		case "event":
 			script = fmt.Sprintf(`?[id, title, description, event_date, created_at] :=
     *mie_event { id, title, description, event_date, created_at },
-    or(str_includes(title, '%s'), str_includes(description, '%s'))
-    :limit %d`, escaped, escaped, limit)
+    or(str_includes(lowercase(title), '%s'), str_includes(lowercase(description), '%s'))
+    :limit %d`, escaped, escaped, perTypeLimit)
 		case "topic":
 			script = fmt.Sprintf(`?[id, name, description, created_at] :=
     *mie_topic { id, name, description, created_at },
-    or(str_includes(name, '%s'), str_includes(description, '%s'))
-    :limit %d`, escaped, escaped, limit)
+    or(str_includes(lowercase(name), '%s'), str_includes(lowercase(description), '%s'))
+    :limit %d`, escaped, escaped, perTypeLimit)
 		default:
 			continue
 		}
