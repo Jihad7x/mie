@@ -237,6 +237,7 @@ var toolHandlers = map[string]toolHandler{
 	"mie_export":     handleExport,
 	"mie_status":     handleMIEStatus,
 	"mie_delete":     handleDelete,
+	"mie_repair":     handleRepair,
 }
 
 // runMCPServer starts the MIE MCP server on stdin/stdout.
@@ -272,15 +273,15 @@ func runMCPServer(configPath string) {
 	// Create the memory client (implements tools.Querier)
 	// This opens CozoDB, ensures schema, and sets up embeddings.
 	client, err := memory.NewClient(memory.ClientConfig{
-		DataDir:            dataDir,
-		StorageEngine:      cfg.Storage.Engine,
-		EmbeddingEnabled:   cfg.Embedding.Enabled,
-		EmbeddingProvider:  cfg.Embedding.Provider,
-		EmbeddingBaseURL:   cfg.Embedding.BaseURL,
-		EmbeddingModel:     cfg.Embedding.Model,
-		EmbeddingAPIKey:    cfg.Embedding.APIKey,
+		DataDir:             dataDir,
+		StorageEngine:       cfg.Storage.Engine,
+		EmbeddingEnabled:    cfg.Embedding.Enabled,
+		EmbeddingProvider:   cfg.Embedding.Provider,
+		EmbeddingBaseURL:    cfg.Embedding.BaseURL,
+		EmbeddingModel:      cfg.Embedding.Model,
+		EmbeddingAPIKey:     cfg.Embedding.APIKey,
 		EmbeddingDimensions: cfg.Embedding.Dimensions,
-		EmbeddingWorkers:   cfg.Embedding.Workers,
+		EmbeddingWorkers:    cfg.Embedding.Workers,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: cannot initialize MIE: %v\n", err)
@@ -518,7 +519,7 @@ func (s *mcpServer) getTools() []mcpTool {
 						"type":        "string",
 						"description": "Conversation fragment or information to analyze for potential memory storage",
 					},
-					},
+				},
 				"required": []string{"content"},
 			},
 		},
@@ -567,7 +568,7 @@ func (s *mcpServer) getTools() []mcpTool {
 					},
 					"name": map[string]any{
 						"type":        "string",
-						"description": "Entity or topic name (required for type=entity, type=topic)",
+						"description": "Entity or topic name (required for type=entity, type=topic). Topic names are normalized to lowercase.",
 					},
 					"kind": map[string]any{
 						"type":        "string",
@@ -672,7 +673,7 @@ func (s *mcpServer) getTools() []mcpTool {
 								},
 								"name": map[string]any{
 									"type":        "string",
-									"description": "Entity or topic name (required for type=entity, type=topic)",
+									"description": "Entity or topic name (required for type=entity, type=topic). Topic names are normalized to lowercase.",
 								},
 								"kind": map[string]any{
 									"type":        "string",
@@ -831,7 +832,7 @@ func (s *mcpServer) getTools() []mcpTool {
 					},
 					"replacement_id": map[string]any{
 						"type":        "string",
-						"description": "ID of the new fact that replaces the invalidated one",
+						"description": "ID of the new fact that replaces the invalidated one. Required for invalidate action.",
 					},
 					"new_value": map[string]any{
 						"type":        "string",
@@ -897,9 +898,9 @@ func (s *mcpServer) getTools() []mcpTool {
 						"default":     "created_at",
 					},
 					"sort_order": map[string]any{
-						"type":        "string",
-						"enum":        []string{"asc", "desc"},
-						"default":     "desc",
+						"type":    "string",
+						"enum":    []string{"asc", "desc"},
+						"default": "desc",
 					},
 				},
 				"required": []string{"node_type"},
@@ -1019,6 +1020,15 @@ func (s *mcpServer) getTools() []mcpTool {
 				"required":   []string{},
 			},
 		},
+		{
+			Name:        "mie_repair",
+			Description: "Rebuild HNSW indexes and clean orphaned embeddings. Use this when semantic search returns errors about missing compound keys or corrupted indexes.",
+			InputSchema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+				"required":   []string{},
+			},
+		},
 	}
 }
 
@@ -1067,6 +1077,39 @@ func handleDelete(ctx context.Context, s *mcpServer, args map[string]any) (*tool
 
 func handleMIEStatus(ctx context.Context, s *mcpServer, args map[string]any) (*tools.ToolResult, error) {
 	return tools.Status(ctx, s.client, args)
+}
+
+func handleRepair(ctx context.Context, s *mcpServer, _ map[string]any) (*tools.ToolResult, error) {
+	type repairer interface {
+		RepairHNSWIndexes() error
+		BackfillEmbeddings(ctx context.Context) (int, error)
+	}
+	r, ok := s.client.(repairer)
+	if !ok {
+		return tools.NewError("Repair not supported by this backend"), nil
+	}
+
+	var sb strings.Builder
+
+	// Step 1: Backfill missing embeddings
+	backfilled, err := r.BackfillEmbeddings(ctx)
+	if err != nil {
+		sb.WriteString(fmt.Sprintf("Warning: embedding backfill failed: %v\n", err))
+	} else if backfilled > 0 {
+		sb.WriteString(fmt.Sprintf("Backfilled %d missing embeddings.\n", backfilled))
+	}
+
+	// Step 2: Rebuild HNSW indexes
+	if err := r.RepairHNSWIndexes(); err != nil {
+		return tools.NewError(fmt.Sprintf("Repair failed: %v", err)), nil
+	}
+	sb.WriteString("HNSW indexes rebuilt successfully.")
+
+	if backfilled == 0 {
+		sb.WriteString("\nNo missing embeddings found.")
+	}
+
+	return tools.NewResult(sb.String()), nil
 }
 
 // buildRecentContext queries the memory graph for recent facts, decisions, and entities,

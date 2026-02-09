@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/kraklabs/mie/pkg/storage"
@@ -33,13 +34,14 @@ type ClientConfig struct {
 // Client provides access to the MIE memory graph.
 // It implements tools.Querier so it can be used by MCP tool handlers.
 type Client struct {
-	backend  storage.Backend
-	config   ClientConfig
-	writer   *Writer
-	reader   *Reader
-	detector *ConflictDetector
-	embedder *EmbeddingGenerator
-	logger   *slog.Logger
+	backend   storage.Backend
+	config    ClientConfig
+	writer    *Writer
+	reader    *Reader
+	detector  *ConflictDetector
+	embedder  *EmbeddingGenerator
+	logger    *slog.Logger
+	counterMu sync.Mutex
 }
 
 // Ensure Client implements tools.Querier at compile time.
@@ -110,6 +112,15 @@ func NewClientWithLogger(cfg ClientConfig, logger *slog.Logger) (*Client, error)
 	reader := NewReader(backend, embedder, logger)
 	detector := NewConflictDetector(backend, embedder, logger)
 
+	// Backfill embeddings for nodes that were created without an embedding provider.
+	if embedder != nil {
+		if n, err := writer.BackfillEmbeddings(context.Background()); err != nil {
+			logger.Warn("embedding backfill failed", "error", err)
+		} else if n > 0 {
+			logger.Info("backfilled embeddings for orphan nodes", "count", n)
+		}
+	}
+
 	return &Client{
 		backend:  backend,
 		config:   cfg,
@@ -123,12 +134,31 @@ func NewClientWithLogger(cfg ClientConfig, logger *slog.Logger) (*Client, error)
 
 // Close releases resources held by the Client.
 func (c *Client) Close() error {
+	c.writer.WaitForEmbeddings()
 	return c.backend.Close()
 }
 
 // RawQuery executes a raw CozoScript query against the database.
 func (c *Client) RawQuery(ctx context.Context, script string) (*storage.QueryResult, error) {
 	return c.backend.Query(ctx, script)
+}
+
+// RepairHNSWIndexes drops and recreates all HNSW indexes, cleaning up
+// orphaned embeddings in the process. Use this to fix corrupted indexes.
+func (c *Client) RepairHNSWIndexes() error {
+	dim := c.config.EmbeddingDimensions
+	if dim <= 0 {
+		dim = 768
+	}
+	return RepairHNSWIndexes(c.backend, dim, c.logger)
+}
+
+// BackfillEmbeddings generates embeddings for nodes that are missing them.
+func (c *Client) BackfillEmbeddings(ctx context.Context) (int, error) {
+	if c.writer == nil {
+		return 0, nil
+	}
+	return c.writer.BackfillEmbeddings(ctx)
 }
 
 // EmbeddingsEnabled reports whether embedding support is configured.
@@ -266,9 +296,19 @@ func (c *Client) ExportGraph(ctx context.Context, opts tools.ExportOptions) (*to
 	return c.reader.ExportGraph(ctx, opts)
 }
 
-// IncrementCounter atomically increments a counter in mie_meta and updates
-// the corresponding last_*_at timestamp.
+// IncrementCounter increments a counter in mie_meta by 1 and updates
+// the corresponding last_*_at timestamp. Protected by a mutex to prevent
+// lost updates from concurrent read-modify-write cycles.
 func (c *Client) IncrementCounter(ctx context.Context, key string) error {
+	return c.IncrementCounterBy(ctx, key, 1)
+}
+
+// IncrementCounterBy increments a counter in mie_meta by n and updates
+// the corresponding last_*_at timestamp.
+func (c *Client) IncrementCounterBy(ctx context.Context, key string, n int) error {
+	c.counterMu.Lock()
+	defer c.counterMu.Unlock()
+
 	// Read current value.
 	readScript := fmt.Sprintf(`?[value] := *mie_meta{key: '%s', value}`, escapeDatalog(key))
 	result, err := c.backend.Query(ctx, readScript)
@@ -281,7 +321,7 @@ func (c *Client) IncrementCounter(ctx context.Context, key string) error {
 	}
 
 	// Write incremented value.
-	next := strconv.Itoa(current + 1)
+	next := strconv.Itoa(current + n)
 	writeScript := fmt.Sprintf(
 		`?[key, value] <- [['%s', '%s']] :put mie_meta {key => value}`,
 		escapeDatalog(key), next,

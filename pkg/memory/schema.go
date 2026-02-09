@@ -228,3 +228,56 @@ func EnsureHNSWIndexes(backend storage.Backend, dim int) error {
 
 	return nil
 }
+
+// hnswIndexInfo maps embedding table names to their HNSW index name and
+// the ID column + parent node table used for orphan detection.
+var hnswIndexInfo = []struct {
+	embTable  string
+	indexName string
+	idCol     string
+	nodeTable string
+}{
+	{"mie_fact_embedding", "fact_embedding_idx", "fact_id", "mie_fact"},
+	{"mie_decision_embedding", "decision_embedding_idx", "decision_id", "mie_decision"},
+	{"mie_entity_embedding", "entity_embedding_idx", "entity_id", "mie_entity"},
+	{"mie_event_embedding", "event_embedding_idx", "event_id", "mie_event"},
+}
+
+// RepairHNSWIndexes drops and recreates HNSW indexes after cleaning up
+// orphaned embedding rows (embeddings whose parent node no longer exists).
+// This fixes HNSW corruption caused by dangling index entries.
+func RepairHNSWIndexes(backend storage.Backend, dim int, logger interface{ Info(string, ...any) }) error {
+	ctx := context.Background()
+
+	for _, info := range hnswIndexInfo {
+		// 1. Drop the HNSW index.
+		dropStmt := fmt.Sprintf(`::hnsw drop %s:%s`, info.embTable, info.indexName)
+		if err := backend.Execute(ctx, dropStmt); err != nil {
+			errStr := err.Error()
+			if !strings.Contains(errStr, "not found") && !strings.Contains(errStr, "does not exist") {
+				return fmt.Errorf("drop hnsw index %s: %w", info.indexName, err)
+			}
+		}
+
+		// 2. Remove orphaned embeddings (parent node deleted but embedding remains).
+		cleanupStmt := fmt.Sprintf(
+			`?[%s] := *%s { %s }, not *%s { id: %s } :rm %s { %s }`,
+			info.idCol, info.embTable, info.idCol,
+			info.nodeTable, info.idCol,
+			info.embTable, info.idCol,
+		)
+		if err := backend.Execute(ctx, cleanupStmt); err != nil {
+			// Non-fatal: log and continue, the index rebuild will still help.
+			if logger != nil {
+				logger.Info("orphan cleanup skipped", "table", info.embTable, "error", err)
+			}
+		}
+	}
+
+	// 3. Recreate all HNSW indexes.
+	if err := EnsureHNSWIndexes(backend, dim); err != nil {
+		return fmt.Errorf("recreate hnsw indexes: %w", err)
+	}
+
+	return nil
+}

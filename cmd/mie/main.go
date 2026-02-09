@@ -72,6 +72,7 @@ Usage:
 Commands:
   init          Create .mie/config.yaml configuration
   status        Show memory graph status
+  repair        Rebuild HNSW indexes and clean orphaned embeddings
   reset         Delete all memory data (destructive!)
   export        Export memory graph
   import        Import memory graph
@@ -161,6 +162,8 @@ Environment Variables:
 		runImport(cmdArgs, *configPath, globals)
 	case "query":
 		runQuery(cmdArgs, *configPath, globals)
+	case "repair":
+		runRepair(*configPath, globals)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		flag.Usage()
