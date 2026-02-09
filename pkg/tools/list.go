@@ -37,6 +37,12 @@ func List(ctx context.Context, client Querier, args map[string]any) (*ToolResult
 		offset = 0
 	}
 
+	sortBy := GetStringArg(args, "sort_by", "created_at")
+	// Map "name" to "content" for facts, which don't have a "name" field.
+	if nodeType == "fact" && sortBy == "name" {
+		sortBy = "content"
+	}
+
 	opts := ListOptions{
 		NodeType:      nodeType,
 		Category:      GetStringArg(args, "category", ""),
@@ -48,8 +54,24 @@ func List(ctx context.Context, client Querier, args map[string]any) (*ToolResult
 		CreatedBefore: int64(GetFloat64Arg(args, "created_before", 0)),
 		Limit:         limit,
 		Offset:        offset,
-		SortBy:        GetStringArg(args, "sort_by", "created_at"),
+		SortBy:        sortBy,
 		SortOrder:     GetStringArg(args, "sort_order", "desc"),
+	}
+
+	// Validate sort_order
+	if opts.SortOrder != "asc" && opts.SortOrder != "desc" {
+		opts.SortOrder = "desc"
+	}
+
+	// Validate filter applicability
+	if opts.Category != "" && nodeType != "fact" {
+		return NewError(fmt.Sprintf("category filter only applies to facts, not %s", nodeType)), nil
+	}
+	if opts.Kind != "" && nodeType != "entity" {
+		return NewError(fmt.Sprintf("kind filter only applies to entities, not %s", nodeType)), nil
+	}
+	if opts.Status != "" && nodeType != "decision" {
+		return NewError(fmt.Sprintf("status filter only applies to decisions, not %s", nodeType)), nil
 	}
 
 	nodes, total, err := client.ListNodes(ctx, opts)
@@ -59,17 +81,19 @@ func List(ctx context.Context, client Querier, args map[string]any) (*ToolResult
 
 	var sb strings.Builder
 
-	typeLabels := map[string]string{
-		"fact": "Facts", "decision": "Decisions", "entity": "Entities", "event": "Events", "topic": "Topics",
-	}
-	label := typeLabels[nodeType]
-
-	sb.WriteString(fmt.Sprintf("## %s (%d total, showing %d-%d)\n\n", label, total, offset+1, offset+len(nodes)))
+	label := TypeLabels[nodeType]
 
 	if len(nodes) == 0 {
-		sb.WriteString("_No results found._\n")
+		sb.WriteString(fmt.Sprintf("## %s (%d total)\n\n", label, total))
+		if offset > 0 && total > 0 {
+			sb.WriteString(fmt.Sprintf("_No results at offset %d. Total %s: %d. Try offset=0._\n", offset, strings.ToLower(label), total))
+		} else {
+			sb.WriteString("_No results found._\n")
+		}
 		return NewResult(sb.String()), nil
 	}
+
+	sb.WriteString(fmt.Sprintf("## %s (%d total, showing %d-%d)\n\n", label, total, offset+1, offset+len(nodes)))
 
 	formatNodeTable(&sb, nodeType, nodes, offset)
 
@@ -92,7 +116,7 @@ func formatNodeTable(sb *strings.Builder, nodeType string, nodes []any, offset i
 				if !f.Valid {
 					valid = "no"
 				}
-				fmt.Fprintf(sb, "| %d | %s | %s | %s | %.1f | %s | %s |\n",
+				fmt.Fprintf(sb, "| %d | %s | %s | %s | %g | %s | %s |\n",
 					offset+i+1, f.ID, Truncate(f.Content, 50), f.Category, f.Confidence, valid, FormatTime(f.CreatedAt))
 			}
 		}

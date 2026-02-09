@@ -18,7 +18,8 @@ func Query(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 	}
 
 	mode := GetStringArg(args, "mode", "semantic")
-	nodeTypes := GetStringSliceArg(args, "node_types", []string{"fact", "decision", "entity", "event"})
+	defaultTypes := []string{"fact", "decision", "entity", "event"}
+	nodeTypes := GetStringSliceArg(args, "node_types", defaultTypes)
 	limit := GetIntArg(args, "limit", 10)
 	if limit < 1 {
 		limit = 1
@@ -42,6 +43,10 @@ func Query(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 	case "semantic":
 		result, err = querySemanticMode(ctx, client, query, nodeTypes, limit, filters)
 	case "exact":
+		// Include topics in exact search when using defaults
+		if !hasUserSpecifiedNodeTypes(args) {
+			nodeTypes = append(nodeTypes, "topic")
+		}
 		result, err = queryExactMode(ctx, client, query, nodeTypes, limit, filters)
 	case "graph":
 		result, err = queryGraphMode(ctx, client, args)
@@ -55,6 +60,11 @@ func Query(ctx context.Context, client Querier, args map[string]any) (*ToolResul
 	}
 
 	return result, err
+}
+
+func hasUserSpecifiedNodeTypes(args map[string]any) bool {
+	_, ok := args["node_types"]
+	return ok
 }
 
 // searchFilters holds optional filters for search results.
@@ -108,10 +118,25 @@ func matchesSearchFilters(r SearchResult, f searchFilters) bool {
 		if f.Kind != "" && m.Kind != f.Kind {
 			return false
 		}
+		if f.Category != "" {
+			return false // category filter implies facts only
+		}
 		createdAt = m.CreatedAt
 	case *Decision:
+		if f.Category != "" {
+			return false // category filter implies facts only
+		}
+		if f.Kind != "" {
+			return false // kind filter implies entities only
+		}
 		createdAt = m.CreatedAt
 	case *Event:
+		if f.Category != "" {
+			return false // category filter implies facts only
+		}
+		if f.Kind != "" {
+			return false // kind filter implies entities only
+		}
 		createdAt = m.CreatedAt
 	}
 	if f.CreatedAfter > 0 && createdAt < f.CreatedAfter {
@@ -128,9 +153,9 @@ func querySemanticMode(ctx context.Context, client Querier, query string, nodeTy
 		return NewError("Semantic search requires embeddings to be enabled. Enable in config or use mode=exact."), nil
 	}
 
-	results, err := client.SemanticSearch(ctx, query, nodeTypes, limit)
-	if err != nil {
-		return NewError(fmt.Sprintf("Semantic search failed: %v", err)), nil
+	results, searchErr := client.SemanticSearch(ctx, query, nodeTypes, limit)
+	if searchErr != nil && len(results) == 0 {
+		return NewError(fmt.Sprintf("Semantic search failed: %v", searchErr)), nil
 	}
 
 	results = applySearchFilters(results, filters)
@@ -142,14 +167,26 @@ func querySemanticMode(ctx context.Context, client Querier, query string, nodeTy
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("## Memory Search Results for: %q\n\n", query))
 
+	if searchErr != nil {
+		sb.WriteString(fmt.Sprintf("_Warning: %v. Results may be incomplete._\n\n", searchErr))
+	}
+
+	// Warn if all results have low confidence (similarity < 40%).
+	allLow := true
+	for _, r := range results {
+		if SimilarityPercent(r.Distance) >= 40 {
+			allLow = false
+			break
+		}
+	}
+	if allLow {
+		sb.WriteString("_Note: No high-confidence matches found. Results below may not be relevant._\n\n")
+	}
+
 	// Group results by type
 	grouped := map[string][]SearchResult{}
 	for _, r := range results {
 		grouped[r.NodeType] = append(grouped[r.NodeType], r)
-	}
-
-	typeLabels := map[string]string{
-		"fact": "Facts", "decision": "Decisions", "entity": "Entities", "event": "Events",
 	}
 
 	for _, nt := range nodeTypes {
@@ -157,13 +194,18 @@ func querySemanticMode(ctx context.Context, client Querier, query string, nodeTy
 		if !ok || len(items) == 0 {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("### %s (%d results)\n", typeLabels[nt], len(items)))
+		sb.WriteString(fmt.Sprintf("### %s (%d results)\n", TypeLabels[nt], len(items)))
 		for i, item := range items {
 			pct := SimilarityPercent(item.Distance)
 			indicator := SimilarityIndicator(item.Distance)
 			sb.WriteString(fmt.Sprintf("%d. %s %d%% [%s] %q\n", i+1, indicator, pct, item.ID, Truncate(item.Content, 100)))
 			if item.Detail != "" {
 				sb.WriteString(fmt.Sprintf("   %s\n", item.Detail))
+			}
+			if item.Metadata != nil {
+				if f, ok := item.Metadata.(*Fact); ok && !f.Valid {
+					sb.WriteString("   [INVALIDATED]\n")
+				}
 			}
 		}
 		sb.WriteString("\n")
@@ -192,20 +234,21 @@ func queryExactMode(ctx context.Context, client Querier, query string, nodeTypes
 		grouped[r.NodeType] = append(grouped[r.NodeType], r)
 	}
 
-	typeLabels := map[string]string{
-		"fact": "Facts", "decision": "Decisions", "entity": "Entities", "event": "Events",
-	}
-
 	for _, nt := range nodeTypes {
 		items, ok := grouped[nt]
 		if !ok || len(items) == 0 {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("### %s (%d results)\n", typeLabels[nt], len(items)))
+		sb.WriteString(fmt.Sprintf("### %s (%d results)\n", TypeLabels[nt], len(items)))
 		for i, item := range items {
 			sb.WriteString(fmt.Sprintf("%d. [%s] %q\n", i+1, item.ID, Truncate(item.Content, 100)))
 			if item.Detail != "" {
 				sb.WriteString(fmt.Sprintf("   %s\n", item.Detail))
+			}
+			if item.Metadata != nil {
+				if f, ok := item.Metadata.(*Fact); ok && !f.Valid {
+					sb.WriteString("   [INVALIDATED]\n")
+				}
 			}
 		}
 		sb.WriteString("\n")
@@ -217,12 +260,27 @@ func queryExactMode(ctx context.Context, client Querier, query string, nodeTypes
 func queryGraphMode(ctx context.Context, client Querier, args map[string]any) (*ToolResult, error) {
 	nodeID := GetStringArg(args, "node_id", "")
 	if nodeID == "" {
-		return NewError("node_id is required for graph mode"), nil
+		// If query looks like a node ID, use it as node_id.
+		query := GetStringArg(args, "query", "")
+		for _, prefix := range []string{"fact:", "ent:", "dec:", "evt:", "top:"} {
+			if strings.HasPrefix(query, prefix) {
+				nodeID = query
+				break
+			}
+		}
+		if nodeID == "" {
+			return NewError("node_id is required for graph mode"), nil
+		}
 	}
 
 	traversal := GetStringArg(args, "traversal", "")
 	if traversal == "" {
 		return NewError("traversal is required for graph mode"), nil
+	}
+
+	// Verify the node exists before traversal.
+	if _, err := client.GetNodeByID(ctx, nodeID); err != nil {
+		return NewError(fmt.Sprintf("Node %q not found", nodeID)), nil
 	}
 
 	var sb strings.Builder
@@ -289,7 +347,7 @@ func traverseRelatedFacts(ctx context.Context, client Querier, sb *strings.Build
 		if !f.Valid {
 			validStr = "invalidated"
 		}
-		fmt.Fprintf(sb, "%d. [%s] %q (category: %s, confidence: %.1f, %s)\n",
+		fmt.Fprintf(sb, "%d. [%s] %q (category: %s, confidence: %g, %s)\n",
 			i+1, f.ID, Truncate(f.Content, 100), f.Category, f.Confidence, validStr)
 	}
 	return nil
@@ -363,7 +421,7 @@ func traverseFactsAboutTopic(ctx context.Context, client Querier, sb *strings.Bu
 		if !f.Valid {
 			validStr = "invalidated"
 		}
-		fmt.Fprintf(sb, "%d. [%s] %q (category: %s, confidence: %.1f, %s)\n",
+		fmt.Fprintf(sb, "%d. [%s] %q (category: %s, confidence: %g, %s)\n",
 			i+1, f.ID, Truncate(f.Content, 100), f.Category, f.Confidence, validStr)
 	}
 	return nil
