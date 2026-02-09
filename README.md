@@ -1,7 +1,11 @@
 <p align="center">
-  <h1 align="center">MIE</h1>
-  <p align="center"><strong>Memory Intelligence Engine</strong></p>
-  <p align="center">Stop re-explaining yourself to every AI agent. MIE gives all your agents — Claude, ChatGPT, Cursor, Gemini — a shared, persistent knowledge graph they can read and write. Decisions, context, facts, and relationships survive across sessions, tools, and providers.</p>
+  <h1 align="center">MIE - Memory Intelligence Engine</h1>
+</p>
+
+<p align="center">Stop re-explaining yourself to every AI agent. MIE gives all your agents — Claude, ChatGPT, Cursor, Gemini — a shared, persistent knowledge graph they can read and write. Decisions, context, facts, and relationships survive across sessions, tools, and providers.</p>
+
+<p align="center">
+  <img src="docs/mie-demo.gif" alt="MIE Demo" width="600">
 </p>
 
 <p align="center">
