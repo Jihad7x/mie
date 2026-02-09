@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // validFactCategories enumerates allowed fact categories.
@@ -22,10 +23,22 @@ var validEntityKinds = map[string]bool{
 	"technology": true, "place": true, "other": true,
 }
 
+const maxContentLength = 10000 // 10KB max for any text field
+
 // validEdgeTypes enumerates allowed relationship edge types.
 var validEdgeTypes = map[string]bool{
 	"fact_entity": true, "fact_topic": true, "decision_topic": true,
 	"decision_entity": true, "event_decision": true, "entity_topic": true,
+}
+
+// validEdgeEndpoints maps edge types to their required source and target node ID prefixes.
+var validEdgeEndpoints = map[string][2]string{
+	"fact_entity":     {"fact:", "ent:"},
+	"fact_topic":      {"fact:", "top:"},
+	"decision_topic":  {"dec:", "top:"},
+	"decision_entity": {"dec:", "ent:"},
+	"event_decision":  {"evt:", "dec:"},
+	"entity_topic":    {"ent:", "top:"},
 }
 
 // Store writes a new node and optional relationships to the memory graph.
@@ -146,6 +159,9 @@ func storeFact(ctx context.Context, client Querier, args map[string]any, sourceA
 	if content == "" {
 		return nil, fmt.Errorf("content is required for fact type")
 	}
+	if len(content) > maxContentLength {
+		return nil, fmt.Errorf("content exceeds maximum length (%d > %d bytes)", len(content), maxContentLength)
+	}
 	category := GetStringArg(args, "category", "general")
 	if !validFactCategories[category] {
 		return nil, fmt.Errorf("invalid category %q. Must be one of: personal, professional, preference, technical, relationship, general", category)
@@ -168,9 +184,15 @@ func storeDecision(ctx context.Context, client Querier, args map[string]any, sou
 	if title == "" {
 		return nil, fmt.Errorf("title is required for decision type")
 	}
+	if len(title) > maxContentLength {
+		return nil, fmt.Errorf("title exceeds maximum length (%d > %d bytes)", len(title), maxContentLength)
+	}
 	rationale := GetStringArg(args, "rationale", "")
 	if rationale == "" {
 		return nil, fmt.Errorf("rationale is required for decision type")
+	}
+	if len(rationale) > maxContentLength {
+		return nil, fmt.Errorf("rationale exceeds maximum length (%d > %d bytes)", len(rationale), maxContentLength)
 	}
 	return client.StoreDecision(ctx, StoreDecisionRequest{
 		Title:              title,
@@ -187,6 +209,13 @@ func storeEntity(ctx context.Context, client Querier, args map[string]any, sourc
 	if name == "" {
 		return nil, fmt.Errorf("name is required for entity type")
 	}
+	if len(name) > maxContentLength {
+		return nil, fmt.Errorf("name exceeds maximum length (%d > %d bytes)", len(name), maxContentLength)
+	}
+	description := GetStringArg(args, "description", "")
+	if len(description) > maxContentLength {
+		return nil, fmt.Errorf("description exceeds maximum length (%d > %d bytes)", len(description), maxContentLength)
+	}
 	kind := GetStringArg(args, "kind", "")
 	if kind == "" {
 		return nil, fmt.Errorf("kind is required for entity type")
@@ -197,7 +226,7 @@ func storeEntity(ctx context.Context, client Querier, args map[string]any, sourc
 	return client.StoreEntity(ctx, StoreEntityRequest{
 		Name:        name,
 		Kind:        kind,
-		Description: GetStringArg(args, "description", ""),
+		Description: description,
 		SourceAgent: sourceAgent,
 	})
 }
@@ -207,13 +236,24 @@ func storeEvent(ctx context.Context, client Querier, args map[string]any, source
 	if title == "" {
 		return nil, fmt.Errorf("title is required for event type")
 	}
+	if len(title) > maxContentLength {
+		return nil, fmt.Errorf("title exceeds maximum length (%d > %d bytes)", len(title), maxContentLength)
+	}
+	eventDescription := GetStringArg(args, "description", "")
+	if len(eventDescription) > maxContentLength {
+		return nil, fmt.Errorf("description exceeds maximum length (%d > %d bytes)", len(eventDescription), maxContentLength)
+	}
 	eventDate := GetStringArg(args, "event_date", "")
 	if eventDate == "" {
 		return nil, fmt.Errorf("event_date is required for event type")
 	}
+	// Validate date format (ISO 8601 date).
+	if _, err := time.Parse("2006-01-02", eventDate); err != nil {
+		return nil, fmt.Errorf("invalid event_date format %q: expected ISO date (YYYY-MM-DD)", eventDate)
+	}
 	return client.StoreEvent(ctx, StoreEventRequest{
 		Title:              title,
-		Description:        GetStringArg(args, "description", ""),
+		Description:        eventDescription,
 		EventDate:          eventDate,
 		SourceAgent:        sourceAgent,
 		SourceConversation: sourceConversation,
@@ -245,6 +285,12 @@ func storeRelationships(ctx context.Context, client Querier, sourceNodeID string
 		edgeType := GetStringArg(relMap, "edge", "")
 		targetID := GetStringArg(relMap, "target_id", "")
 		if edgeType == "" || targetID == "" {
+			if edgeType == "" {
+				sb.WriteString("- Skipped relationship: missing edge type\n")
+			}
+			if targetID == "" {
+				sb.WriteString(fmt.Sprintf("- Skipped %s: missing target_id\n", edgeType))
+			}
 			continue
 		}
 		if !validEdgeTypes[edgeType] {
@@ -256,6 +302,18 @@ func storeRelationships(ctx context.Context, client Querier, sourceNodeID string
 		if target, err := client.GetNodeByID(ctx, targetID); err != nil || target == nil {
 			sb.WriteString(fmt.Sprintf("- Skipped %s -> [%s]: target node not found\n", edgeType, targetID))
 			continue
+		}
+
+		// Validate source and target node types match the edge semantics.
+		if endpoints, ok := validEdgeEndpoints[edgeType]; ok {
+			if !strings.HasPrefix(sourceNodeID, endpoints[0]) {
+				sb.WriteString(fmt.Sprintf("- Skipped %s: source node [%s] must be a %s node\n", edgeType, sourceNodeID, strings.TrimSuffix(endpoints[0], ":")))
+				continue
+			}
+			if !strings.HasPrefix(targetID, endpoints[1]) {
+				sb.WriteString(fmt.Sprintf("- Skipped %s: target node [%s] must be a %s node\n", edgeType, targetID, strings.TrimSuffix(endpoints[1], ":")))
+				continue
+			}
 		}
 
 		fields := buildEdgeFields(edgeType, sourceNodeID, targetID, relMap)
@@ -284,9 +342,7 @@ func buildEdgeFields(edgeType, sourceNodeID, targetID string, relMap map[string]
 	case "decision_entity":
 		fields["decision_id"] = sourceNodeID
 		fields["entity_id"] = targetID
-		if role := GetStringArg(relMap, "role", ""); role != "" {
-			fields["role"] = role
-		}
+		fields["role"] = GetStringArg(relMap, "role", "")
 	case "event_decision":
 		fields["event_id"] = sourceNodeID
 		fields["decision_id"] = targetID
