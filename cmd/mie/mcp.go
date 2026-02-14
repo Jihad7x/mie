@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "1.2.0" // HNSW repair, semantic search boosting, bulk validation, 14 bugfixes, edge schema refactor
+	mcpVersion    = "1.3.0" // Daemon multi-instance architecture, deadlock fixes, PID locking, stale socket detection
 	mcpServerName = "mie"
 )
 

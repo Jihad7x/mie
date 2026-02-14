@@ -128,18 +128,21 @@ These connect through typed relationships — a decision references entities, re
 
 ## MCP Tools
 
-MIE exposes 9 tools through the Model Context Protocol:
+MIE exposes 12 tools through the Model Context Protocol:
 
 | Tool | What it does |
 |---|---|
 | `mie_analyze` | Surfaces related context before storing — the agent decides what's worth remembering |
 | `mie_store` | Writes facts, decisions, entities, events, and relationships to the graph |
 | `mie_bulk_store` | Batch store up to 50 nodes with cross-references — ideal for importing knowledge from files or git history |
+| `mie_get` | Retrieve a single memory node by ID with full details |
 | `mie_query` | Semantic search, exact lookup, or graph traversal across all node types |
 | `mie_list` | List and filter nodes with pagination |
 | `mie_update` | Invalidate outdated facts, update statuses — with full history preserved |
+| `mie_delete` | Remove nodes with cascade (embedding + edges) or remove individual relationships |
 | `mie_conflicts` | Detect contradictions in stored knowledge |
 | `mie_export` | Export the full graph as JSON or Datalog |
+| `mie_repair` | Rebuild HNSW indexes and clean orphaned embeddings |
 | `mie_status` | Graph health, node counts, usage metrics |
 
 ### Zero Server-Side Inference
@@ -157,9 +160,15 @@ This philosophy extends to importing: when you ask your agent to "import knowled
 └──────────────┬──────────────────────┘
                │ MCP (JSON-RPC over stdio)
 ┌──────────────▼──────────────────────┐
-│  MIE Server                         │
-│  9 tools · semantic search ·        │
+│  MIE Server  (one per MCP client)   │
+│  12 tools · semantic search ·       │
 │  graph traversal · conflicts        │
+└──────────────┬──────────────────────┘
+               │ Unix domain socket
+┌──────────────▼──────────────────────┐
+│  MIE Daemon  (shared singleton)     │
+│  Manages exclusive DB lock ·        │
+│  Serves multiple clients            │
 └──────────────┬──────────────────────┘
                │ Datalog queries
 ┌──────────────▼──────────────────────┐
@@ -170,6 +179,8 @@ This philosophy extends to importing: when you ask your agent to "import knowled
 ```
 
 *ChatGPT via custom GPT Actions pointing to MIE Cloud (coming soon).*
+
+Multiple MCP clients (Claude, Cursor, etc.) can run simultaneously — the daemon holds the exclusive database lock and multiplexes access. The daemon starts automatically on first use or can be managed manually via `mie daemon`.
 
 ## Memory Lifecycle
 
@@ -205,7 +216,11 @@ All settings can be overridden with environment variables. Embeddings are option
 ```bash
 mie init                    # Create config with defaults
 mie init --interview        # Interactive project bootstrapping
-mie --mcp                   # Start as MCP server
+mie --mcp                   # Start as MCP server (auto-starts daemon)
+mie daemon start            # Start daemon in foreground
+mie daemon start --background  # Start daemon in background
+mie daemon stop             # Stop running daemon
+mie daemon status           # Check if daemon is running
 mie status                  # Show graph statistics
 mie export                  # Export memory graph
 mie import -i backup.json   # Import from JSON or Datalog

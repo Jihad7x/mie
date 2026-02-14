@@ -5,6 +5,45 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-14
+
+### Added
+
+- **Daemon multi-instance architecture**: a single `mie daemon` process holds the exclusive RocksDB lock, multiple MCP clients connect via Unix domain socket — eliminates "database locked" errors when agents run concurrently
+- `mie daemon start|stop|status` CLI commands for managing the daemon lifecycle
+- `--background` flag for `mie daemon start` to run the daemon as a detached process
+- Auto-start daemon: `mie --mcp` automatically starts the daemon if not running, with retry/backoff connection logic
+- `MetaBackend` interface abstracting `EmbeddedBackend` and `SocketBackend` for transparent local/remote storage
+- `SocketBackend`: client that forwards Datalog queries over Unix domain socket using newline-delimited JSON protocol
+- `Daemon` server: accepts socket connections, dispatches queries to the embedded CozoDB backend
+- `NewClientWithBackend` constructor for connecting `memory.Client` to a pre-existing backend (e.g. daemon socket)
+- Ping-based liveness check: `SocketBackend.Ping()` verifies daemon is alive after connecting
+- PID file locking with `flock(LOCK_EX|LOCK_NB)` to prevent concurrent daemon starts
+- Daemon connection tracking: active connections are stored in a map and closed on shutdown for prompt cleanup
+- Socket file permissions restricted to owner-only (`0600`) to prevent local privilege escalation
+- Embedding dimension validation: daemon stores dimensions in `mie_meta`, clients verify on connect to catch mismatches early
+- 13 new socket/daemon tests + 2 dimension validation tests in `pkg/memory`
+
+### Fixed
+
+- **Deadlock in `SocketBackend.Close()`** (CRITICAL): `Close()` now releases the mutex before closing the connection, unblocking any goroutine stuck in `ReadBytes`
+- **Silent fallback to embedded mode** (CRITICAL): `mie --mcp` no longer silently falls back to embedded storage when the daemon is unreachable — fails with a clear error and hint message instead
+- **PID file race condition** (CRITICAL): daemon start now uses `flock()` for atomic ownership instead of write-then-check, preventing two daemons from starting simultaneously
+- **Stale socket without live process** (CRITICAL): `connectOrStartDaemon` now pings after connecting and removes stale sockets from crashed daemons
+- Scanner errors in daemon `handleConn` are now logged instead of silently ignored
+- Daemon `handleConn` receives the parent context for proper cancellation propagation
+- Background daemon startup verifies the process is still alive via `Signal(0)` after a brief startup period
+- `SocketBackend.send()` marks backend as closed on I/O errors so subsequent calls fail fast
+- `SocketBackend.send()` validates response ID matches request ID to detect protocol desync
+- `SocketBackend.Close()` sends `MethodClose` to daemon for clean disconnect before closing the connection
+
+### Changed
+
+- MCP server version bumped to 1.3.0
+- `mie --mcp` requires a running daemon (auto-started or manual) instead of opening CozoDB directly
+- Daemon shutdown waits up to 5 seconds for active handlers to complete before forcing exit
+- `runDaemonStop` handles stale PID files gracefully (removes file if process not found)
+
 ## [1.2.0] - 2026-02-09
 
 ### Added
@@ -172,6 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[1.3.0]: https://github.com/kraklabs/mie/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/kraklabs/mie/compare/v0.1.9...v1.2.0
 [0.1.9]: https://github.com/kraklabs/mie/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kraklabs/mie/compare/v0.1.7...v0.1.8

@@ -165,7 +165,7 @@ func runDaemonStart(args []string, configPath string, _ GlobalFlags) {
 	}
 	fmt.Fprintf(pidFile, "%d", os.Getpid())
 	defer func() {
-		syscall.Flock(int(pidFile.Fd()), syscall.LOCK_UN)
+		_ = syscall.Flock(int(pidFile.Fd()), syscall.LOCK_UN)
 		pidFile.Close()
 		os.Remove(pidPath)
 	}()

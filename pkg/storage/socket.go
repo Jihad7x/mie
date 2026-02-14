@@ -110,7 +110,7 @@ func (s *SocketBackend) sendClose() error {
 		return err
 	}
 	// Set a short write deadline so we don't block.
-	s.conn.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = s.conn.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
 	_, err = fmt.Fprintf(s.conn, "%s\n", data)
 	return err
 }

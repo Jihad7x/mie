@@ -37,7 +37,7 @@ func NewDaemon(backend *EmbeddedBackend, socketPath string) *Daemon {
 	}
 }
 
-// Serve starts accepting connections. Blocks until ctx is cancelled.
+// Serve starts accepting connections. Blocks until ctx is canceled.
 // Cleans up the socket file on exit. On shutdown, closes all active
 // client connections so handlers unblock promptly.
 func (d *Daemon) Serve(ctx context.Context) error {
@@ -66,7 +66,7 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		os.Remove(d.socketPath)
 	}()
 
-	// Close listener and all active connections when context is cancelled.
+	// Close listener and all active connections when context is canceled.
 	go func() {
 		<-ctx.Done()
 		ln.Close()
@@ -144,7 +144,7 @@ func (d *Daemon) handleConn(ctx context.Context, conn net.Conn) {
 }
 
 // dispatch handles a single request and returns a response.
-// Uses the daemon's context so backend operations are cancelled on shutdown.
+// Uses the daemon's context so backend operations are canceled on shutdown.
 func (d *Daemon) dispatch(ctx context.Context, req DaemonRequest) DaemonResponse {
 	switch req.Method {
 	case MethodPing:
