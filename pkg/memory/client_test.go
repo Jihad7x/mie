@@ -8,6 +8,7 @@ package memory
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/kraklabs/mie/pkg/tools"
@@ -100,6 +101,48 @@ func TestClientStoreFact(t *testing.T) {
 	if node == nil {
 		t.Fatal("expected non-nil node")
 	}
+}
+
+func TestNewClientWithBackendDimensionMismatch(t *testing.T) {
+	backend := newTestBackend(t)
+	defer backend.Close()
+	setupSchema(t, backend)
+
+	// Simulate daemon storing dimensions as 768
+	if err := backend.SetMeta("embedding_dimensions", "768"); err != nil {
+		t.Fatalf("set meta: %v", err)
+	}
+
+	// Client expects 384 — should fail
+	_, err := NewClientWithBackend(backend, ClientConfig{
+		EmbeddingDimensions: 384,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected dimension mismatch error")
+	}
+	if !strings.Contains(err.Error(), "dimension mismatch") {
+		t.Errorf("expected 'dimension mismatch' in error, got: %v", err)
+	}
+}
+
+func TestNewClientWithBackendDimensionMatch(t *testing.T) {
+	backend := newTestBackend(t)
+	defer backend.Close()
+	setupSchema(t, backend)
+
+	// Simulate daemon storing dimensions as 384
+	if err := backend.SetMeta("embedding_dimensions", "384"); err != nil {
+		t.Fatalf("set meta: %v", err)
+	}
+
+	// Client also expects 384 — should succeed
+	client, err := NewClientWithBackend(backend, ClientConfig{
+		EmbeddingDimensions: 384,
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewClientWithBackend should succeed: %v", err)
+	}
+	client.Close()
 }
 
 func TestNewClientWithBackend(t *testing.T) {

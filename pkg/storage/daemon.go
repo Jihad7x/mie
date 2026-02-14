@@ -25,6 +25,8 @@ type Daemon struct {
 	socketPath string
 	listener   net.Listener
 	wg         sync.WaitGroup
+	connMu     sync.Mutex
+	conns      map[net.Conn]struct{}
 }
 
 // NewDaemon creates a new daemon that serves the given backend on a Unix socket.
@@ -36,7 +38,8 @@ func NewDaemon(backend *EmbeddedBackend, socketPath string) *Daemon {
 }
 
 // Serve starts accepting connections. Blocks until ctx is cancelled.
-// Cleans up the socket file on exit.
+// Cleans up the socket file on exit. On shutdown, closes all active
+// client connections so handlers unblock promptly.
 func (d *Daemon) Serve(ctx context.Context) error {
 	// Remove stale socket file
 	if err := os.Remove(d.socketPath); err != nil && !os.IsNotExist(err) {
@@ -55,6 +58,7 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	}
 
 	d.listener = ln
+	d.conns = make(map[net.Conn]struct{})
 
 	// Clean up socket file on exit
 	defer func() {
@@ -62,10 +66,15 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		os.Remove(d.socketPath)
 	}()
 
-	// Close listener when context is cancelled
+	// Close listener and all active connections when context is cancelled.
 	go func() {
 		<-ctx.Done()
 		ln.Close()
+		d.connMu.Lock()
+		for conn := range d.conns {
+			conn.Close()
+		}
+		d.connMu.Unlock()
 	}()
 
 	for {
@@ -86,16 +95,24 @@ func (d *Daemon) Serve(ctx context.Context) error {
 			}
 		}
 
+		d.connMu.Lock()
+		d.conns[conn] = struct{}{}
+		d.connMu.Unlock()
+
 		d.wg.Add(1)
 		go func() {
 			defer d.wg.Done()
-			d.handleConn(conn)
+			d.handleConn(ctx, conn)
+			d.connMu.Lock()
+			delete(d.conns, conn)
+			d.connMu.Unlock()
 		}()
 	}
 }
 
 // handleConn reads requests from a client connection and writes responses.
-func (d *Daemon) handleConn(conn net.Conn) {
+// The context is used to propagate cancellation to backend operations.
+func (d *Daemon) handleConn(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)
 	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
@@ -113,19 +130,22 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			continue
 		}
 
-		resp := d.dispatch(req)
+		resp := d.dispatch(ctx, req)
 		d.writeResponse(conn, resp)
 
 		if req.Method == MethodClose {
 			return
 		}
 	}
+
+	if err := scanner.Err(); err != nil {
+		log.Printf("[DAEMON] scanner error: %v", err)
+	}
 }
 
 // dispatch handles a single request and returns a response.
-func (d *Daemon) dispatch(req DaemonRequest) DaemonResponse {
-	ctx := context.Background()
-
+// Uses the daemon's context so backend operations are cancelled on shutdown.
+func (d *Daemon) dispatch(ctx context.Context, req DaemonRequest) DaemonResponse {
 	switch req.Method {
 	case MethodPing:
 		return DaemonResponse{OK: true, ID: req.ID}

@@ -14,6 +14,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	cozo "github.com/kraklabs/mie/pkg/cozodb"
 )
@@ -78,16 +79,53 @@ func (s *SocketBackend) Execute(ctx context.Context, datalog string) error {
 	return nil
 }
 
-// Close disconnects from the daemon.
+// Close sends a MethodClose to the daemon for clean disconnect,
+// then closes the underlying connection. Safe to call multiple times.
+// Closes the connection first (without mutex) to unblock any pending
+// ReadBytes call in send(), preventing deadlock.
 func (s *SocketBackend) Close() error {
+	// Fast check without lock — if already closed, nothing to do.
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.closed {
+		s.mu.Unlock()
 		return nil
 	}
 	s.closed = true
+	s.mu.Unlock()
+
+	// Best-effort: send MethodClose so daemon cleans up the connection.
+	// Ignore errors — the connection may already be broken.
+	_ = s.sendClose()
+
+	// Close connection to unblock any goroutine blocked on ReadBytes.
 	return s.conn.Close()
+}
+
+// sendClose sends a MethodClose request without going through the
+// mutex-protected send() path, since Close() already set s.closed.
+func (s *SocketBackend) sendClose() error {
+	req := DaemonRequest{Method: MethodClose, ID: "close"}
+	data, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	// Set a short write deadline so we don't block.
+	s.conn.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
+	_, err = fmt.Fprintf(s.conn, "%s\n", data)
+	return err
+}
+
+// Ping sends a ping request to the daemon and verifies it responds.
+// Use this to check that the daemon is alive after connecting.
+func (s *SocketBackend) Ping() error {
+	resp, err := s.send(DaemonRequest{Method: MethodPing})
+	if err != nil {
+		return fmt.Errorf("ping failed: %w", err)
+	}
+	if !resp.OK {
+		return fmt.Errorf("ping failed: %s", resp.Error)
+	}
+	return nil
 }
 
 // GetMeta retrieves a metadata value from the daemon.
@@ -155,6 +193,7 @@ func (s *SocketBackend) DB() *cozo.CozoDB {
 
 // send serializes a request, sends it to the daemon, and reads the response.
 // Thread-safe: uses a mutex to serialize access to the connection.
+// On I/O errors, marks the backend as closed so subsequent calls fail fast.
 func (s *SocketBackend) send(req DaemonRequest) (*DaemonResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -171,17 +210,23 @@ func (s *SocketBackend) send(req DaemonRequest) (*DaemonResponse, error) {
 	}
 
 	if _, err := fmt.Fprintf(s.conn, "%s\n", data); err != nil {
+		s.closed = true
 		return nil, fmt.Errorf("send request: %w", err)
 	}
 
 	line, err := s.reader.ReadBytes('\n')
 	if err != nil {
+		s.closed = true
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
 	var resp DaemonResponse
 	if err := json.Unmarshal(line, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	if resp.ID != req.ID {
+		return nil, fmt.Errorf("protocol error: expected response ID %s, got %s", req.ID, resp.ID)
 	}
 
 	return &resp, nil

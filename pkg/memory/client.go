@@ -135,10 +135,24 @@ func NewClientWithLogger(cfg ClientConfig, logger *slog.Logger) (*Client, error)
 
 // NewClientWithBackend creates a new memory Client using an existing backend.
 // Use this when connecting via SocketBackend to a daemon. Schema must already
-// be initialized on the daemon side.
+// be initialized on the daemon side. Validates that the daemon's embedding
+// dimensions match the client's configuration.
 func NewClientWithBackend(backend storage.Backend, cfg ClientConfig, logger *slog.Logger) (*Client, error) {
 	if logger == nil {
 		logger = slog.Default()
+	}
+
+	// Validate embedding dimensions match the daemon's configuration.
+	if mb, ok := backend.(storage.MetaBackend); ok {
+		if daemonDim, err := mb.GetMeta("embedding_dimensions"); err == nil && daemonDim != "" {
+			dim := cfg.EmbeddingDimensions
+			if dim <= 0 {
+				dim = 768
+			}
+			if daemonDimInt, err := strconv.Atoi(daemonDim); err == nil && daemonDimInt != dim {
+				return nil, fmt.Errorf("embedding dimension mismatch: daemon=%d, client=%d", daemonDimInt, dim)
+			}
+		}
 	}
 
 	// Set up embedding provider if enabled

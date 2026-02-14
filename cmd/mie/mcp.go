@@ -270,11 +270,6 @@ func runMCPServer(configPath string) {
 		os.Exit(ExitDatabase)
 	}
 
-	// Try connecting to daemon first (enables multi-instance support).
-	// Fall back to direct embedded mode if daemon isn't available.
-	var client tools.Querier
-	var closeFn func() error
-
 	embeddingCfg := memory.ClientConfig{
 		DataDir:             dataDir,
 		StorageEngine:       cfg.Storage.Engine,
@@ -287,32 +282,24 @@ func runMCPServer(configPath string) {
 		EmbeddingWorkers:    cfg.Embedding.Workers,
 	}
 
-	if sb, connErr := connectOrStartDaemon(configPath); connErr == nil {
-		fmt.Fprintf(os.Stderr, "  Mode: daemon (multi-instance)\n")
-
-		c, clientErr := memory.NewClientWithBackend(sb, embeddingCfg, nil)
-		if clientErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: cannot create client via daemon: %v\n", clientErr)
-			fmt.Fprintf(os.Stderr, "Falling back to direct mode...\n")
-			sb.Close()
-		} else {
-			client = c
-			closeFn = c.Close
-		}
+	// Connect to daemon (auto-starts if needed) for multi-instance support.
+	// No silent fallback to embedded mode — that would re-introduce the
+	// RocksDB exclusive lock problem this daemon architecture solves.
+	sb, connErr := connectOrStartDaemon(configPath)
+	if connErr != nil {
+		fmt.Fprintf(os.Stderr, "Error: cannot connect to daemon: %v\n", connErr)
+		fmt.Fprintf(os.Stderr, "Hint: run 'mie daemon start' manually or check 'mie daemon status'\n")
+		os.Exit(ExitDatabase)
 	}
+	fmt.Fprintf(os.Stderr, "  Mode: daemon (multi-instance)\n")
 
-	// Fallback: direct embedded mode (original behavior)
-	if client == nil {
-		fmt.Fprintf(os.Stderr, "  Mode: embedded (single instance)\n")
-		c, clientErr := memory.NewClient(embeddingCfg)
-		if clientErr != nil {
-			fmt.Fprintf(os.Stderr, "Error: cannot initialize MIE: %v\n", clientErr)
-			os.Exit(ExitDatabase)
-		}
-		client = c
-		closeFn = c.Close
+	client, clientErr := memory.NewClientWithBackend(sb, embeddingCfg, nil)
+	if clientErr != nil {
+		sb.Close()
+		fmt.Fprintf(os.Stderr, "Error: cannot create client via daemon: %v\n", clientErr)
+		os.Exit(ExitDatabase)
 	}
-	defer func() { _ = closeFn() }()
+	defer func() { _ = client.Close() }()
 
 	server := &mcpServer{
 		client: client,

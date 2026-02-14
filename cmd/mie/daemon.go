@@ -76,7 +76,13 @@ func runDaemonStart(args []string, configPath string, _ GlobalFlags) {
 			os.Exit(ExitGeneral)
 		}
 
-		time.Sleep(200 * time.Millisecond)
+		// Verify the process is still alive after startup period.
+		time.Sleep(500 * time.Millisecond)
+		if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: daemon process died during startup\n")
+			os.Exit(ExitGeneral)
+		}
+
 		fmt.Fprintf(os.Stderr, "MIE daemon started (PID %d)\n", cmd.Process.Pid)
 		return
 	}
@@ -131,18 +137,38 @@ func runDaemonStart(args []string, configPath string, _ GlobalFlags) {
 		}
 	}
 
+	// Store embedding dimensions so clients can validate compatibility.
+	if err := embedded.SetMeta("embedding_dimensions", strconv.Itoa(dim)); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: cannot store embedding dimensions: %v\n", err)
+	}
+
 	socketPath := storage.DefaultSocketPath()
 	pidPath := storage.DefaultPIDPath()
 
-	// Ensure parent directory exists
+	// Ensure parent directory exists — fatal if it fails since Serve
+	// will also fail to bind the socket.
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0750); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: cannot create socket directory: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: cannot create socket directory: %v\n", err)
+		os.Exit(ExitGeneral)
 	}
 
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: cannot write PID file: %v\n", err)
+	// Acquire exclusive lock on PID file to prevent concurrent daemon starts.
+	pidFile, err := os.OpenFile(pidPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: cannot open PID file: %v\n", err)
+		os.Exit(ExitGeneral)
 	}
-	defer os.Remove(pidPath)
+	if err := syscall.Flock(int(pidFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		pidFile.Close()
+		fmt.Fprintf(os.Stderr, "Error: another daemon is already running (PID file locked)\n")
+		os.Exit(ExitGeneral)
+	}
+	fmt.Fprintf(pidFile, "%d", os.Getpid())
+	defer func() {
+		syscall.Flock(int(pidFile.Fd()), syscall.LOCK_UN)
+		pidFile.Close()
+		os.Remove(pidPath)
+	}()
 
 	daemon := storage.NewDaemon(embedded, socketPath)
 
@@ -184,14 +210,16 @@ func runDaemonStop() {
 		os.Exit(ExitGeneral)
 	}
 
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot find process %d: %v\n", pid, err)
-		os.Exit(ExitGeneral)
-	}
+	// On Unix, FindProcess always succeeds. The actual check is the signal.
+	proc, _ := os.FindProcess(pid)
 
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot signal process %d: %v\n", pid, err)
+		if strings.Contains(err.Error(), "no such process") {
+			fmt.Fprintf(os.Stderr, "Daemon process %d not found (already stopped?)\n", pid)
+			os.Remove(pidPath)
+		} else {
+			fmt.Fprintf(os.Stderr, "Cannot signal process %d: %v\n", pid, err)
+		}
 		os.Exit(ExitGeneral)
 	}
 
@@ -219,13 +247,19 @@ func runDaemonStatus() {
 
 // connectOrStartDaemon tries to connect to the daemon socket.
 // If the daemon is not running, starts it and retries the connection.
+// Verifies the daemon is alive via Ping after connecting (handles stale sockets).
 func connectOrStartDaemon(configPath string) (*storage.SocketBackend, error) {
 	socketPath := storage.DefaultSocketPath()
 
-	// Try connecting first
+	// Try connecting first and verify the daemon is alive.
 	sb, err := storage.NewSocketBackend(socketPath)
 	if err == nil {
-		return sb, nil
+		if pingErr := sb.Ping(); pingErr == nil {
+			return sb, nil
+		}
+		// Stale socket — daemon not responding. Clean up and start fresh.
+		sb.Close()
+		os.Remove(socketPath)
 	}
 
 	// Daemon not running — start it
@@ -249,15 +283,26 @@ func connectOrStartDaemon(configPath string) (*storage.SocketBackend, error) {
 		return nil, fmt.Errorf("start daemon: %w", err)
 	}
 
-	// Retry connection with backoff
-	delays := []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second}
+	// Verify process is still alive after a brief startup period.
+	time.Sleep(300 * time.Millisecond)
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		return nil, fmt.Errorf("daemon process died immediately after start")
+	}
+
+	// Retry connection with backoff, verifying via Ping.
+	delays := []time.Duration{200 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
 	for _, delay := range delays {
 		time.Sleep(delay)
 		sb, err = storage.NewSocketBackend(socketPath)
-		if err == nil {
-			fmt.Fprintf(os.Stderr, "Connected to MIE daemon.\n")
-			return sb, nil
+		if err != nil {
+			continue
 		}
+		if pingErr := sb.Ping(); pingErr != nil {
+			sb.Close()
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "Connected to MIE daemon.\n")
+		return sb, nil
 	}
 
 	return nil, fmt.Errorf("daemon started but cannot connect after retries: %w", err)

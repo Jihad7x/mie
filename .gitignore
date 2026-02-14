@@ -29,3 +29,5 @@ vendor/
 .cie/
 
 CLAUDE.md
+
+.specs/
