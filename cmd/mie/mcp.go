@@ -270,9 +270,12 @@ func runMCPServer(configPath string) {
 		os.Exit(ExitDatabase)
 	}
 
-	// Create the memory client (implements tools.Querier)
-	// This opens CozoDB, ensures schema, and sets up embeddings.
-	client, err := memory.NewClient(memory.ClientConfig{
+	// Try connecting to daemon first (enables multi-instance support).
+	// Fall back to direct embedded mode if daemon isn't available.
+	var client tools.Querier
+	var closeFn func() error
+
+	embeddingCfg := memory.ClientConfig{
 		DataDir:             dataDir,
 		StorageEngine:       cfg.Storage.Engine,
 		EmbeddingEnabled:    cfg.Embedding.Enabled,
@@ -282,12 +285,34 @@ func runMCPServer(configPath string) {
 		EmbeddingAPIKey:     cfg.Embedding.APIKey,
 		EmbeddingDimensions: cfg.Embedding.Dimensions,
 		EmbeddingWorkers:    cfg.Embedding.Workers,
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: cannot initialize MIE: %v\n", err)
-		os.Exit(ExitDatabase)
 	}
-	defer func() { _ = client.Close() }()
+
+	if sb, connErr := connectOrStartDaemon(configPath); connErr == nil {
+		fmt.Fprintf(os.Stderr, "  Mode: daemon (multi-instance)\n")
+
+		c, clientErr := memory.NewClientWithBackend(sb, embeddingCfg, nil)
+		if clientErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: cannot create client via daemon: %v\n", clientErr)
+			fmt.Fprintf(os.Stderr, "Falling back to direct mode...\n")
+			sb.Close()
+		} else {
+			client = c
+			closeFn = c.Close
+		}
+	}
+
+	// Fallback: direct embedded mode (original behavior)
+	if client == nil {
+		fmt.Fprintf(os.Stderr, "  Mode: embedded (single instance)\n")
+		c, clientErr := memory.NewClient(embeddingCfg)
+		if clientErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: cannot initialize MIE: %v\n", clientErr)
+			os.Exit(ExitDatabase)
+		}
+		client = c
+		closeFn = c.Close
+	}
+	defer func() { _ = closeFn() }()
 
 	server := &mcpServer{
 		client: client,

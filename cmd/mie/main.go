@@ -164,6 +164,8 @@ Environment Variables:
 		runQuery(cmdArgs, *configPath, globals)
 	case "repair":
 		runRepair(*configPath, globals)
+	case "daemon":
+		runDaemon(cmdArgs, *configPath, globals)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		flag.Usage()
