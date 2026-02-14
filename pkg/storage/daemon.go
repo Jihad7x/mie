@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 )
 
 // Daemon serves CozoDB over a Unix domain socket, allowing multiple
@@ -46,6 +47,13 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", d.socketPath, err)
 	}
+
+	// Restrict socket to owner-only to prevent local privilege escalation.
+	if err := os.Chmod(d.socketPath, 0600); err != nil {
+		ln.Close()
+		return fmt.Errorf("chmod socket: %w", err)
+	}
+
 	d.listener = ln
 
 	// Clean up socket file on exit
@@ -65,7 +73,13 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		if err != nil {
 			select {
 			case <-ctx.Done():
-				d.wg.Wait()
+				done := make(chan struct{})
+				go func() { d.wg.Wait(); close(done) }()
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					log.Printf("[DAEMON] shutdown timeout, forcing exit")
+				}
 				return nil
 			default:
 				return fmt.Errorf("accept: %w", err)

@@ -77,6 +77,7 @@ Commands:
   export        Export memory graph
   import        Import memory graph
   query         Execute CozoScript query (debugging)
+  daemon        Manage the MIE daemon (start, stop, status)
 
 Global Options:
   --json            Output in JSON format

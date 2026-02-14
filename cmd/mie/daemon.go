@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -134,7 +135,7 @@ func runDaemonStart(args []string, configPath string, _ GlobalFlags) {
 	pidPath := storage.DefaultPIDPath()
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(strings.TrimSuffix(socketPath, "/mie.sock"), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0750); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: cannot create socket directory: %v\n", err)
 	}
 
