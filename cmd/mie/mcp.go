@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "1.3.0" // Daemon multi-instance architecture, deadlock fixes, PID locking, stale socket detection
+	mcpVersion    = "1.3.1" // Auto-start daemon on init
 	mcpServerName = "mie"
 )
 

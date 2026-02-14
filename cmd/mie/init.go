@@ -74,11 +74,19 @@ Examples:
 
 	if *interview {
 		runInterview(cfg, globals)
-	} else if !globals.Quiet {
-		fmt.Println()
-		fmt.Println("Next steps:")
-		fmt.Println("  1. Edit .mie/config.yaml to customize settings")
-		fmt.Println("  2. Run 'mie --mcp' to start the MCP server")
+	}
+
+	// Auto-start daemon so the MCP server is ready when the IDE connects.
+	// Must happen after interview (if any) to avoid RocksDB lock conflict.
+	sb, err := connectOrStartDaemon(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not start daemon: %v\n", err)
+		fmt.Fprintf(os.Stderr, "You can start it manually with: mie daemon start\n")
+	} else {
+		sb.Close()
+		if !globals.Quiet {
+			fmt.Println("MIE daemon is running.")
+		}
 	}
 }
 
