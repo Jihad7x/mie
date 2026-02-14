@@ -102,6 +102,40 @@ func TestClientStoreFact(t *testing.T) {
 	}
 }
 
+func TestNewClientWithBackend(t *testing.T) {
+	backend := newTestBackend(t)
+	defer backend.Close()
+	setupSchema(t, backend)
+
+	client, err := NewClientWithBackend(backend, ClientConfig{
+		EmbeddingDimensions: 384,
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewClientWithBackend: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	fact, err := client.StoreFact(ctx, tools.StoreFactRequest{
+		Content:  "test fact from NewClientWithBackend",
+		Category: "technical",
+	})
+	if err != nil {
+		t.Fatalf("store fact: %v", err)
+	}
+	if fact.ID == "" {
+		t.Error("expected non-empty fact ID")
+	}
+
+	node, err := client.GetNodeByID(ctx, fact.ID)
+	if err != nil {
+		t.Fatalf("get node: %v", err)
+	}
+	if node == nil {
+		t.Fatal("expected non-nil node")
+	}
+}
+
 func TestClientGetStats(t *testing.T) {
 	client, err := NewClient(ClientConfig{
 		DataDir:             t.TempDir(),

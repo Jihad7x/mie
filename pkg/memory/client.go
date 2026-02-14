@@ -133,6 +133,46 @@ func NewClientWithLogger(cfg ClientConfig, logger *slog.Logger) (*Client, error)
 	}, nil
 }
 
+// NewClientWithBackend creates a new memory Client using an existing backend.
+// Use this when connecting via SocketBackend to a daemon. Schema must already
+// be initialized on the daemon side.
+func NewClientWithBackend(backend storage.Backend, cfg ClientConfig, logger *slog.Logger) (*Client, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	// Set up embedding provider if enabled
+	var embedder *EmbeddingGenerator
+	if cfg.EmbeddingEnabled && cfg.EmbeddingProvider != "" {
+		provider, err := CreateEmbeddingProvider(
+			cfg.EmbeddingProvider,
+			cfg.EmbeddingAPIKey,
+			cfg.EmbeddingBaseURL,
+			cfg.EmbeddingModel,
+			logger,
+		)
+		if err != nil {
+			logger.Warn("failed to create embedding provider, continuing without embeddings", "error", err)
+		} else {
+			embedder = NewEmbeddingGenerator(provider, logger)
+		}
+	}
+
+	writer := NewWriter(backend, embedder, logger)
+	reader := NewReader(backend, embedder, logger)
+	detector := NewConflictDetector(backend, embedder, logger)
+
+	return &Client{
+		backend:  backend,
+		config:   cfg,
+		writer:   writer,
+		reader:   reader,
+		detector: detector,
+		embedder: embedder,
+		logger:   logger,
+	}, nil
+}
+
 // Close releases resources held by the Client.
 func (c *Client) Close() error {
 	c.writer.WaitForEmbeddings()
