@@ -17,6 +17,11 @@ func TestBackendInterface(t *testing.T) {
 	var _ Backend = &EmbeddedBackend{}
 }
 
+// TestEmbeddedBackendImplementsMetaBackend verifies that EmbeddedBackend implements MetaBackend.
+func TestEmbeddedBackendImplementsMetaBackend(t *testing.T) {
+	var _ MetaBackend = (*EmbeddedBackend)(nil)
+}
+
 // TestQueryResult_ToNamedRows tests the conversion from QueryResult to CozoDB NamedRows.
 func TestQueryResult_ToNamedRows(t *testing.T) {
 	qr := &QueryResult{

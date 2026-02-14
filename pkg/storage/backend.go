@@ -25,6 +25,27 @@ type Backend interface {
 	Close() error
 }
 
+// MetaBackend extends Backend with metadata and schema management.
+// Both EmbeddedBackend and SocketBackend implement this interface.
+type MetaBackend interface {
+	Backend
+
+	// GetMeta retrieves a metadata value by key.
+	GetMeta(key string) (string, error)
+
+	// SetMeta sets a metadata value by key.
+	SetMeta(key, value string) error
+
+	// EnsureSchema creates the MIE metadata table if it doesn't exist.
+	EnsureSchema() error
+
+	// CreateHNSWIndex creates HNSW indexes for semantic search.
+	CreateHNSWIndex(dimensions int) error
+
+	// DB returns the underlying CozoDB instance, or nil for remote backends.
+	DB() *cozo.CozoDB
+}
+
 // QueryResult represents the result of a Datalog query.
 type QueryResult struct {
 	Headers []string
