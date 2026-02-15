@@ -51,10 +51,10 @@ func runDaemon(args []string, configPath string, globals GlobalFlags) {
 
 func runDaemonStart(args []string, configPath string, _ GlobalFlags) {
 	fs := flag.NewFlagSet("daemon start", flag.ExitOnError)
-	background := fs.Bool("background", false, "Run daemon in background")
+	foreground := fs.Bool("foreground", false, "Run daemon in foreground (for debugging)")
 	_ = fs.Parse(args)
 
-	if *background {
+	if !*foreground {
 		exe, err := os.Executable()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: cannot find executable: %v\n", err)

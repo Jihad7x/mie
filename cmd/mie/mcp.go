@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "1.3.2" // Fix broken pipe on daemon close
+	mcpVersion    = "1.3.3" // Daemon runs in background by default; status uses daemon
 	mcpServerName = "mie"
 )
 

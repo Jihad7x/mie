@@ -16,6 +16,7 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/kraklabs/mie/pkg/memory"
+	"github.com/kraklabs/mie/pkg/storage"
 )
 
 // StatusResult represents the memory graph status for JSON output.
@@ -96,11 +97,27 @@ Examples:
 		return
 	}
 
-	// Open memory client
-	client, err := memory.NewClient(memory.ClientConfig{
+	// Try connecting to the daemon first to avoid RocksDB lock conflicts.
+	// Fall back to direct embedded mode only if the daemon is not running.
+	clientCfg := memory.ClientConfig{
 		DataDir:       dataDir,
 		StorageEngine: cfg.Storage.Engine,
-	})
+	}
+	var client *memory.Client
+	sb, sbErr := storage.NewSocketBackend(storage.DefaultSocketPath())
+	if sbErr == nil {
+		if pingErr := sb.Ping(); pingErr == nil {
+			client, err = memory.NewClientWithBackend(sb, clientCfg, nil)
+			if err != nil {
+				sb.Close()
+			}
+		} else {
+			sb.Close()
+		}
+	}
+	if client == nil {
+		client, err = memory.NewClient(clientCfg)
+	}
 	if err != nil {
 		result.Connected = false
 		result.Error = fmt.Sprintf("Cannot open database: %v", err)
