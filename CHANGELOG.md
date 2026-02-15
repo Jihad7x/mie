@@ -5,6 +5,19 @@ All notable changes to MIE (Memory Intelligence Engine) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-02-15
+
+### Changed
+
+- `mie daemon start` now runs in background by default; use `--foreground` for debugging (replaces `--background`)
+- `mie status` connects to the daemon via socket first, falling back to direct RocksDB only if the daemon is not running — fixes `LOCK: Resource temporarily unavailable` when daemon is active
+
+## [1.3.2] - 2026-02-15
+
+### Fixed
+
+- Broken pipe error on daemon close: `handleConn` now returns immediately on `MethodClose` without attempting to write a response to the already-closed client connection
+
 ## [1.3.1] - 2026-02-14
 
 ### Added
@@ -217,6 +230,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration via YAML file with environment variable overrides
 - Conflict detection for semantically similar but potentially contradicting facts
 
+[1.3.3]: https://github.com/kraklabs/mie/compare/v1.3.2...v1.3.3
+[1.3.2]: https://github.com/kraklabs/mie/compare/v1.3.1...v1.3.2
+[1.3.1]: https://github.com/kraklabs/mie/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/kraklabs/mie/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/kraklabs/mie/compare/v0.1.9...v1.2.0
 [0.1.9]: https://github.com/kraklabs/mie/compare/v0.1.8...v0.1.9

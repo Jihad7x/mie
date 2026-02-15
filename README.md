@@ -217,8 +217,8 @@ All settings can be overridden with environment variables. Embeddings are option
 mie init                    # Create config with defaults
 mie init --interview        # Interactive project bootstrapping
 mie --mcp                   # Start as MCP server (auto-starts daemon)
-mie daemon start            # Start daemon in foreground
-mie daemon start --background  # Start daemon in background
+mie daemon start            # Start daemon in background
+mie daemon start --foreground  # Start daemon in foreground (for debugging)
 mie daemon stop             # Stop running daemon
 mie daemon status           # Check if daemon is running
 mie status                  # Show graph statistics
