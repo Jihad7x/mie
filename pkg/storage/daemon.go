@@ -130,12 +130,12 @@ func (d *Daemon) handleConn(ctx context.Context, conn net.Conn) {
 			continue
 		}
 
+		if req.Method == MethodClose {
+			return // client already closed; no response needed
+		}
+
 		resp := d.dispatch(ctx, req)
 		d.writeResponse(conn, resp)
-
-		if req.Method == MethodClose {
-			return
-		}
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -195,9 +195,6 @@ func (d *Daemon) dispatch(ctx context.Context, req DaemonRequest) DaemonResponse
 		if err != nil {
 			return DaemonResponse{OK: false, ID: req.ID, Error: err.Error()}
 		}
-		return DaemonResponse{OK: true, ID: req.ID}
-
-	case MethodClose:
 		return DaemonResponse{OK: true, ID: req.ID}
 
 	default:

@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "1.3.1" // Auto-start daemon on init
+	mcpVersion    = "1.3.2" // Fix broken pipe on daemon close
 	mcpServerName = "mie"
 )
 
