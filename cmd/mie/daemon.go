@@ -25,20 +25,16 @@ import (
 )
 
 func runDaemon(args []string, configPath string, globals GlobalFlags) {
-	fs := flag.NewFlagSet("daemon", flag.ExitOnError)
-	fs.ParseErrorsWhitelist.UnknownFlags = true
-	_ = fs.Parse(args)
-
-	if fs.NArg() == 0 {
+	if len(args) == 0 {
 		fmt.Fprintf(os.Stderr, "Usage: mie daemon <start|stop|status>\n")
 		os.Exit(ExitGeneral)
 	}
 
-	subcommand := fs.Arg(0)
+	subcommand := args[0]
 
 	switch subcommand {
 	case "start":
-		runDaemonStart(fs.Args()[1:], configPath, globals)
+		runDaemonStart(args[1:], configPath, globals)
 	case "stop":
 		runDaemonStop()
 	case "status":

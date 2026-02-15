@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mcpVersion    = "1.3.3" // Daemon runs in background by default; status uses daemon
+	mcpVersion    = "1.3.4" // Fix --foreground flag parsing in daemon subcommand
 	mcpServerName = "mie"
 )
 
